@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Light theme (default :root) — soft, friendly, bubble. */
+  :root {
+    --c-bg: 244 243 251;
+    --c-surface: 255 255 255;
+    --c-card: 255 255 255;
+    --c-border: 230 229 242;
+    --c-fg: 30 33 64;
+    --c-sub: 90 98 130;
+    --c-muted: 150 156 184;
+    --c-amber: 186 117 23;
+    --c-amber-light: 224 154 43;
+    --c-teal: 15 142 111;
+    --c-coral: 216 90 48;
+    --c-purple: 91 79 196;
+    --c-green: 78 142 31;
+    --c-indigo: 63 99 214;
+  }
+
+  /* Dark theme (deep focus night) — applied when colorScheme = dark. */
+  .dark:root,
+  .dark {
+    --c-bg: 10 14 26;
+    --c-surface: 18 26 46;
+    --c-card: 26 36 64;
+    --c-border: 38 49 79;
+    --c-fg: 237 241 251;
+    --c-sub: 154 166 194;
+    --c-muted: 92 104 137;
+    --c-amber: 245 180 84;
+    --c-amber-light: 255 208 130;
+    --c-teal: 52 217 196;
+    --c-coral: 242 119 107;
+    --c-purple: 167 139 250;
+    --c-green: 74 222 128;
+    --c-indigo: 108 140 255;
+  }
+}
