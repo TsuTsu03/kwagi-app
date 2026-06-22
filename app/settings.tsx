@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/ui/Screen';
+import { Container } from '@/components/ui/Container';
 import { FadeIn } from '@/components/ui/FadeIn';
 import { Card } from '@/components/ui/Card';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppStore } from '@/lib/store';
 import { BOARD_LIST, type BoardId } from '@/constants/boards';
 import { clearAllData } from '@/lib/db/client';
@@ -35,23 +38,27 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
 
   const confirmClear = () => {
-    Alert.alert('Clear all data?', 'Mawawala lahat ng notes, cards, at progress mo. 😢 Hindi na ito maibabalik.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          await clearAllData();
-          setBusy(false);
-          Alert.alert('Done', 'Na-clear na ang data. I-restart ang app para mag-seed ulit.');
+    Alert.alert(
+      'Clear all data?',
+      'This permanently deletes all your notes, cards, and progress. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            await clearAllData();
+            setBusy(false);
+            Alert.alert('Done', 'Data cleared. Restart the app to re-seed sample data.');
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
-    <Screen>
+    <Screen rail={false}>
       <View className="flex-row items-center border-b border-bordersoft p-4">
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" className="h-10 w-10 items-center justify-center">
           <Ionicons name="chevron-back" size={26} color={c.sub} />
@@ -60,19 +67,24 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <Container>
         {/* Appearance */}
         <FadeIn index={0}>
           <SectionLabel icon="color-palette" label="APPEARANCE" />
           <Card className="mb-5">
             <Text className="text-md text-ink">Theme</Text>
-            <Text className="mb-3 text-xs text-muted">Piliin ang mas komportable sa mata mo</Text>
+            <Text className="mb-3 text-xs text-muted">Choose what's easiest on your eyes</Text>
             <View className="flex-row gap-2">
               {THEMES.map((t) => {
                 const active = settings.themePref === t.value;
                 return (
-                  <Pressable
+                  <PressableScale
                     key={t.value}
-                    onPress={() => updateSettings({ themePref: t.value })}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      updateSettings({ themePref: t.value });
+                    }}
+                    haptic={false}
                     accessibilityRole="button"
                     accessibilityLabel={`${t.label} theme`}
                     accessibilityState={{ selected: active }}
@@ -80,7 +92,7 @@ export default function SettingsScreen() {
                   >
                     <Ionicons name={t.icon} size={20} color={active ? c.amber : c.sub} />
                     <Text className={`mt-1.5 text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{t.label}</Text>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -94,7 +106,7 @@ export default function SettingsScreen() {
             <View className="flex-row items-center justify-between">
               <View className="flex-1 pr-3">
                 <Text className="text-md text-ink">Animations</Text>
-                <Text className="text-xs text-muted">Owl breathing, glows, at smooth transitions</Text>
+                <Text className="text-xs text-muted">Owl breathing, glows, and smooth transitions</Text>
               </View>
               <Switch
                 value={settings.kwagiAnimations}
@@ -115,15 +127,19 @@ export default function SettingsScreen() {
               {GOALS.map((g) => {
                 const active = settings.dailyGoal === g;
                 return (
-                  <Pressable
+                  <PressableScale
                     key={g}
-                    onPress={() => setDailyGoal(g)}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setDailyGoal(g);
+                    }}
+                    haptic={false}
                     accessibilityRole="button"
                     accessibilityLabel={`Daily goal ${g}`}
                     className={`rounded-pill border px-4 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}
                   >
                     <Text className={active ? 'font-bold text-amber' : 'text-sub'}>{g}</Text>
-                  </Pressable>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -133,17 +149,20 @@ export default function SettingsScreen() {
               {BOARD_LIST.map((b) => {
                 const active = settings.activeBoard === b.id;
                 return (
-                  <Pressable
+                  <PressableScale
                     key={b.id}
-                    onPress={() => setActiveBoard(b.id as BoardId)}
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      setActiveBoard(b.id as BoardId);
+                    }}
+                    haptic={false}
                     accessibilityRole="button"
                     accessibilityLabel={b.name}
-                    className={`rounded-pill border px-3 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}
+                    className={`flex-row items-center rounded-pill border px-3.5 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}
                   >
-                    <Text className={active ? 'font-bold text-amber' : 'text-sub'}>
-                      {b.icon} {b.id}
-                    </Text>
-                  </Pressable>
+                    <Ionicons name={b.icon} size={15} color={active ? c.amber : c.sub} />
+                    <Text className={`ml-1.5 ${active ? 'font-bold text-amber' : 'text-sub'}`}>{b.id}</Text>
+                  </PressableScale>
                 );
               })}
             </View>
@@ -187,10 +206,11 @@ export default function SettingsScreen() {
             <Text className="text-md font-bold tracking-tight text-ink">Kwagi — Your Study Buddy</Text>
             <Text className="mt-1 text-xs text-sub">v1.0.0</Text>
             <Text className="mt-2 text-xs text-muted">
-              Kwagi is inspired by the Philippine Kwago (Barn Owl) 🦉
+              Kwagi is inspired by the Philippine Kwago (Barn Owl).
             </Text>
           </Card>
         </FadeIn>
+        </Container>
       </ScrollView>
     </Screen>
   );

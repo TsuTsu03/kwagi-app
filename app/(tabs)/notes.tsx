@@ -13,9 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
 import { KwagiSpeech } from '@/components/kwagi/KwagiSpeech';
 import { Screen } from '@/components/ui/Screen';
+import { Container } from '@/components/ui/Container';
 import { FadeIn } from '@/components/ui/FadeIn';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { IconBadge, safeIcon, type IconName } from '@/components/ui/IconBadge';
 import {
   listSubjects,
   listNotes,
@@ -30,12 +33,14 @@ import {
 import { useAppStore } from '@/lib/store';
 import { BOARDS } from '@/constants/boards';
 import { useThemeColors } from '@/hooks/useTheme';
+import { useTablet } from '@/hooks/useTablet';
 
 type NotesView = 'subjects' | 'notes' | 'editor';
 
 export default function NotesScreen() {
   const { settings } = useAppStore();
   const c = useThemeColors();
+  const { isTablet } = useTablet();
   const [view, setView] = useState<NotesView>('subjects');
   const [subjects, setSubjects] = useState<SubjectWithCount[]>([]);
   const [activeSubject, setActiveSubject] = useState<SubjectWithCount | null>(null);
@@ -121,23 +126,25 @@ export default function NotesScreen() {
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Note title..."
-              placeholderTextColor={c.muted}
-              className="text-2xl font-bold tracking-tight text-ink"
-            />
-            <View className="my-3 h-px bg-bordersoft" />
-            <TextInput
-              value={content}
-              onChangeText={setContent}
-              placeholder="Isulat mo dito ang notes mo... (#tags ok)"
-              placeholderTextColor={c.muted}
-              multiline
-              textAlignVertical="top"
-              className="min-h-[300px] text-md text-ink leading-6"
-            />
+            <Container>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Note title..."
+                placeholderTextColor={c.muted}
+                className="text-2xl font-bold tracking-tight text-ink"
+              />
+              <View className="my-3 h-px bg-bordersoft" />
+              <TextInput
+                value={content}
+                onChangeText={setContent}
+                placeholder="Write your notes here... (#tags supported)"
+                placeholderTextColor={c.muted}
+                multiline
+                textAlignVertical="top"
+                className="min-h-[300px] text-md text-ink leading-6"
+              />
+            </Container>
           </ScrollView>
         </KeyboardAvoidingView>
       </Screen>
@@ -152,8 +159,9 @@ export default function NotesScreen() {
           <Pressable onPress={() => setView('subjects')} accessibilityRole="button" accessibilityLabel="Back to subjects" className="h-10 w-10 items-center justify-center">
             <Ionicons name="chevron-back" size={26} color={c.sub} />
           </Pressable>
-          <Text className="flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
-            {activeSubject.icon} {activeSubject.name}
+          <Ionicons name={safeIcon(activeSubject.icon)} size={18} color={activeSubject.color ?? c.amber} />
+          <Text className="ml-2 flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
+            {activeSubject.name}
           </Text>
         </View>
 
@@ -161,24 +169,29 @@ export default function NotesScreen() {
           <View className="flex-1 items-center justify-center p-6">
             <KwagiOwl mood="happy" size={120} animate={settings.kwagiAnimations} />
             <View className="mt-3 w-full max-w-[280px]">
-              <KwagiSpeech text="Wala pang notes dito! Mag-create tayo ng una! ✍️" tail="none" />
+              <KwagiSpeech text="Wala pang notes dito! Mag-create tayo ng una." tail="none" />
             </View>
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+            <Container>
             {notes.map((n, i) => (
               <FadeIn key={n.id} index={i}>
-                <Pressable
+                <PressableScale
                   onPress={() => openEditor(n)}
                   accessibilityRole="button"
                   accessibilityLabel={`Open note ${n.title}`}
                   className="mb-3 rounded-card border border-bordersoft bg-surface p-4"
                 >
                   <View className="flex-row items-center justify-between">
-                    <Text className="flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
-                      {n.pinned ? '📌 ' : ''}
-                      {n.title}
-                    </Text>
+                    <View className="flex-1 flex-row items-center">
+                      {!!n.pinned && (
+                        <Ionicons name="bookmark" size={14} color={c.amber} style={{ marginRight: 6 }} />
+                      )}
+                      <Text className="flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
+                        {n.title}
+                      </Text>
+                    </View>
                     <Pressable onPress={() => removeNote(n.id)} accessibilityRole="button" accessibilityLabel="Delete note" hitSlop={10} className="ml-2">
                       <Ionicons name="trash-outline" size={18} color={c.muted} />
                     </Pressable>
@@ -195,14 +208,16 @@ export default function NotesScreen() {
                       ))}
                     </View>
                   )}
-                </Pressable>
+                </PressableScale>
               </FadeIn>
             ))}
+            </Container>
           </ScrollView>
         )}
 
-        <Pressable
+        <PressableScale
           onPress={() => openEditor(null)}
+          pressedScale={0.9}
           accessibilityRole="button"
           accessibilityLabel="New note"
           className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-amber"
@@ -215,7 +230,7 @@ export default function NotesScreen() {
           }}
         >
           <Ionicons name="add" size={30} color={c.bg} />
-        </Pressable>
+        </PressableScale>
       </Screen>
     );
   }
@@ -224,34 +239,37 @@ export default function NotesScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <Container>
         <FadeIn index={0}>
           <Text className="mb-1 text-2xl font-extrabold tracking-tighter text-ink">My Notes</Text>
-          <Text className="mb-5 text-sm text-sub">I-organize ang reviewer mo per subject.</Text>
+          <Text className="mb-5 text-sm text-sub">Organize your reviewer by subject.</Text>
         </FadeIn>
 
-        {subjects.map((s, i) => (
-          <FadeIn key={s.id} index={i + 1}>
-            <Pressable
-              onPress={() => openSubject(s)}
-              onLongPress={() => deleteSubject(s.id).then(refreshSubjects)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open subject ${s.name}`}
-              className="mb-3 flex-row items-center rounded-card border border-bordersoft bg-surface p-4"
-              style={{ borderLeftColor: s.color ?? c.amber, borderLeftWidth: 4 }}
-            >
-              <Text className="text-2xl">{s.icon ?? '📚'}</Text>
-              <View className="ml-3 flex-1">
-                <Text className="text-md font-bold tracking-tight text-ink">{s.name}</Text>
-                <Text className="text-xs text-sub">{s.note_count} notes</Text>
-              </View>
-              {s.board && <Badge label={s.board} color={s.color ?? c.amber} />}
-              <Ionicons name="chevron-forward" size={20} color={c.muted} />
-            </Pressable>
-          </FadeIn>
-        ))}
+        <View className="flex-row flex-wrap gap-3">
+          {subjects.map((s, i) => (
+            <FadeIn key={s.id} index={i + 1} className={isTablet ? 'basis-[48%] grow' : 'w-full'}>
+              <PressableScale
+                onPress={() => openSubject(s)}
+                onLongPress={() => deleteSubject(s.id).then(refreshSubjects)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open subject ${s.name}`}
+                className="h-full flex-row items-center rounded-card border border-bordersoft bg-surface p-4"
+              >
+                <IconBadge name={(s.icon as IconName) || 'book'} color={s.color ?? c.amber} box={44} />
+                <View className="ml-3 flex-1">
+                  <Text className="text-md font-bold tracking-tight text-ink" numberOfLines={1}>{s.name}</Text>
+                  <Text className="text-xs text-sub">{s.note_count} notes</Text>
+                </View>
+                {s.board && <Badge label={s.board} color={s.color ?? c.amber} />}
+                <Ionicons name="chevron-forward" size={20} color={c.muted} />
+              </PressableScale>
+            </FadeIn>
+          ))}
+        </View>
 
+        <View className="mt-3">
         {composingSubject ? (
-          <View className="mb-3 rounded-card border border-amber bg-surface p-4">
+          <View className="rounded-card border border-amber bg-surface p-4">
             <TextInput
               value={newSubjectName}
               onChangeText={setNewSubjectName}
@@ -276,7 +294,7 @@ export default function NotesScreen() {
             </View>
           </View>
         ) : (
-          <Pressable
+          <PressableScale
             onPress={() => setComposingSubject(true)}
             accessibilityRole="button"
             accessibilityLabel="New subject"
@@ -284,8 +302,10 @@ export default function NotesScreen() {
           >
             <Ionicons name="add" size={20} color={c.amber} />
             <Text className="ml-1 text-md font-semibold text-amber">New Subject</Text>
-          </Pressable>
+          </PressableScale>
         )}
+        </View>
+        </Container>
       </ScrollView>
     </Screen>
   );

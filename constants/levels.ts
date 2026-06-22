@@ -1,18 +1,23 @@
 /** XP thresholds → level names. Kwagi's gamified progression. */
+import type { Ionicons } from '@expo/vector-icons';
+
+export type LevelIcon = keyof typeof Ionicons.glyphMap;
+
 export interface Level {
   name: string;
   minXp: number;
-  badge: string;
+  /** Ionicons glyph name — never an emoji. */
+  icon: LevelIcon;
 }
 
 export const LEVELS: Level[] = [
-  { name: 'Freshie', minXp: 0, badge: '🥚' },
-  { name: 'Studybuddy', minXp: 100, badge: '📖' },
-  { name: 'Reviewee', minXp: 300, badge: '✏️' },
-  { name: 'Crammer', minXp: 700, badge: '☕' },
-  { name: 'Marunong', minXp: 1500, badge: '🧠' },
-  { name: 'Board Ready', minXp: 3000, badge: '🔥' },
-  { name: 'Board Passer', minXp: 6000, badge: '🎓' },
+  { name: 'Freshie', minXp: 0, icon: 'leaf' },
+  { name: 'Studybuddy', minXp: 100, icon: 'book' },
+  { name: 'Reviewee', minXp: 300, icon: 'pencil' },
+  { name: 'Crammer', minXp: 700, icon: 'cafe' },
+  { name: 'Marunong', minXp: 1500, icon: 'bulb' },
+  { name: 'Board Ready', minXp: 3000, icon: 'flame' },
+  { name: 'Board Passer', minXp: 6000, icon: 'trophy' },
 ];
 
 export interface LevelProgress {

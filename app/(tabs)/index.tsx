@@ -1,22 +1,36 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View, Pressable } from 'react-native';
+import { RefreshControl, ScrollView, Text, View, Pressable } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
 import { Screen } from '@/components/ui/Screen';
+import { Container } from '@/components/ui/Container';
 import { FadeIn } from '@/components/ui/FadeIn';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { CountUp } from '@/components/ui/CountUp';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { IconBadge, type IconName } from '@/components/ui/IconBadge';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAppStore } from '@/lib/store';
 import { BOARD_LIST, BOARDS, type BoardId } from '@/constants/boards';
 import { getLevel } from '@/constants/levels';
-import { filipinoDate } from '@/lib/date';
+import { formatDate } from '@/lib/date';
 import { getStreak, getToday, getTotals } from '@/lib/db/progress';
 import { countDue } from '@/lib/db/flashcards';
 import { getCoachAdvice, type CoachAdvice } from '@/lib/coach';
+import { useKwagiMood } from '@/hooks/useKwagiMood';
 import { useThemeColors } from '@/hooks/useTheme';
 import { useTablet } from '@/hooks/useTablet';
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function HomeScreen() {
   const { settings, setActiveBoard } = useAppStore();
@@ -28,30 +42,41 @@ export default function HomeScreen() {
   const [cardsToday, setCardsToday] = useState(0);
   const [studySeconds, setStudySeconds] = useState(0);
   const [due, setDue] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    const [s, today, totals, dueCount] = await Promise.all([
+      getStreak(),
+      getToday(),
+      getTotals(),
+      countDue(),
+    ]);
+    setStreak(s);
+    setXpToday(today.xp_earned);
+    setCardsToday(today.cards_studied + today.questions_answered);
+    setStudySeconds(today.study_time_seconds);
+    setTotalXp(totals.totalXp);
+    setDue(dueCount);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      (async () => {
-        const [s, today, totals, dueCount] = await Promise.all([
-          getStreak(),
-          getToday(),
-          getTotals(),
-          countDue(),
-        ]);
-        if (!alive) return;
-        setStreak(s);
-        setXpToday(today.xp_earned);
-        setCardsToday(today.cards_studied + today.questions_answered);
-        setStudySeconds(today.study_time_seconds);
-        setTotalXp(totals.totalXp);
-        setDue(dueCount);
+      void (async () => {
+        if (alive) await load();
       })();
       return () => {
         alive = false;
       };
-    }, []),
+    }, [load]),
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const advice = getCoachAdvice({
     studySecondsToday: studySeconds,
@@ -62,25 +87,39 @@ export default function HomeScreen() {
   const goal = settings.dailyGoal;
   const goalPct = goal > 0 ? Math.min(1, cardsToday / goal) : 0;
   const activeBoard = settings.activeBoard;
-  const owlSize = isTablet ? 132 : 104;
+  const owlSize = isTablet ? 124 : 96;
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={c.amber}
+            colors={[c.amber]}
+            progressBackgroundColor={c.surface}
+          />
+        }
+      >
+        <Container>
         {/* Header */}
         <FadeIn index={0}>
-          <View className="mb-5 flex-row items-center justify-between">
-            <View>
-              <Text className="text-3xl font-extrabold tracking-tighter text-amber">Kwagi</Text>
-              <Text className="mt-0.5 text-sm text-sub">{filipinoDate()}</Text>
+          <View className="mb-6 flex-row items-center justify-between">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm text-sub">{greeting()}</Text>
+              <Text className="mt-0.5 text-3xl font-extrabold tracking-tighter text-ink">Kwagi</Text>
+              <Text className="mt-0.5 text-sm text-muted">{formatDate()}</Text>
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Settings"
               onPress={() => router.push('/settings')}
-              className="h-11 w-11 items-center justify-center rounded-full bg-surface border border-bordersoft"
+              className="h-11 w-11 items-center justify-center rounded-full border border-bordersoft bg-surface"
             >
-              <Ionicons name="settings-outline" size={22} color={c.sub} />
+              <Ionicons name="settings-outline" size={21} color={c.sub} />
             </Pressable>
           </View>
         </FadeIn>
@@ -90,94 +129,102 @@ export default function HomeScreen() {
           <CoachBlock advice={advice} owlSize={owlSize} animate={settings.kwagiAnimations} />
         </FadeIn>
 
-        {/* Stats row */}
+        {/* Today */}
         <FadeIn index={2}>
-          <View className="mb-5 mt-5 flex-row gap-3">
-            <StatCard icon="flame" tint={c.coral} value={String(streak)} label="Streak" glow={streak >= 7 ? c.coral : undefined} />
-            <StatCard icon="flash" tint={c.amber} value={String(xpToday)} label="XP Today" />
-            <StatCard badge={level.level.badge} value={level.level.name} label="Level" small />
-          </View>
+          <SectionHeader title="Today" className="mt-7" />
         </FadeIn>
 
-        {/* Today's goal */}
+        {/* Stats — one quiet panel, three columns, no competing glows */}
         <FadeIn index={3}>
-          <Card className="mb-5" glow={goalPct >= 1 ? c.green : undefined}>
-            <View className="mb-2 flex-row items-center justify-between">
-              <Text className="text-md font-bold tracking-tight text-ink">Today's Goal</Text>
-              <Text className="text-sm text-sub">
+          <Card className="mb-4 flex-row items-center">
+            <StatColumn icon="flame" tint={c.coral} value={streak} label="Streak" />
+            <Divider />
+            <StatColumn icon="flash" tint={c.amber} value={xpToday} label="XP today" />
+            <Divider />
+            <StatColumn icon={level.level.icon} tint={c.purple} value={level.level.name} label="Level" />
+          </Card>
+        </FadeIn>
+
+        {/* Daily goal */}
+        <FadeIn index={4}>
+          <Card className="mb-4" glow={goalPct >= 1 ? c.green : undefined}>
+            <View className="mb-2.5 flex-row items-center justify-between">
+              <Text className="text-md font-bold tracking-tight text-ink">Daily goal</Text>
+              <Text className="text-sm font-semibold text-sub">
                 {cardsToday}/{goal} cards
               </Text>
             </View>
-            <ProgressBar progress={goalPct} color={c.green} />
-            <Text className="mt-2 text-sm text-sub">
+            <ProgressBar progress={goalPct} color={goalPct >= 1 ? c.green : c.amber} />
+            <Text className="mt-2.5 text-sm text-sub leading-5">
               {goalPct >= 1
-                ? 'Tapos na! Idol! 🎉'
+                ? "Today's goal complete. Great work!"
                 : goalPct >= 0.5
-                  ? `${Math.round(goalPct * 100)}% — Konti na lang! 💪`
-                  : `${Math.round(goalPct * 100)}% — Kaya pa! Tuloy lang.`}
+                  ? `${Math.round(goalPct * 100)}% — almost there, keep going.`
+                  : `${Math.round(goalPct * 100)}% — one step at a time.`}
             </Text>
           </Card>
+        </FadeIn>
+
+        {/* Due for review — only emphasized when there's something to do */}
+        <FadeIn index={5}>
+          <PressableScale
+            onPress={() => due > 0 && router.navigate('/quiz')}
+            disabled={due === 0}
+            haptic={due > 0}
+            accessibilityRole="button"
+            accessibilityLabel={due > 0 ? 'Review due cards' : 'No cards due'}
+          >
+            <Card className="mb-4 flex-row items-center" glow={due > 0 ? c.amber : undefined}>
+              <IconBadge name="albums" color={due > 0 ? c.amber : c.muted} box={44} />
+              <View className="ml-3 flex-1">
+                <Text className="text-md font-bold tracking-tight text-ink">Due for review</Text>
+                <Text className="mt-0.5 text-sm text-sub leading-5">
+                  {due > 0 ? `${due} ${due === 1 ? 'card' : 'cards'} due today` : "Nothing due — you're all caught up!"}
+                </Text>
+              </View>
+              {due > 0 && <Ionicons name="chevron-forward" size={20} color={c.amber} />}
+            </Card>
+          </PressableScale>
         </FadeIn>
 
         {/* Quick actions */}
-        <FadeIn index={4}>
-          <View className="mb-5 flex-row flex-wrap gap-3">
-            <QuickAction icon="school" label="Start Quiz" tint={c.amber} onPress={() => router.navigate('/quiz')} />
-            <QuickAction icon="chatbubble-ellipses" label="Ask Kwagi" tint={c.purple} onPress={() => router.navigate('/chat')} />
-            <QuickAction icon="document-text" label="My Notes" tint={c.teal} onPress={() => router.navigate('/notes')} />
-            <QuickAction icon="stats-chart" label="Progress" tint={c.green} onPress={() => router.navigate('/progress')} />
+        <FadeIn index={6}>
+          <SectionHeader title="Quick actions" className="mt-3" />
+          <View className="flex-row flex-wrap gap-3">
+            <QuickAction icon="school" label="Quiz" hint="Practice questions" tint={c.amber} onPress={() => router.navigate('/quiz')} />
+            <QuickAction icon="chatbubble-ellipses" label="Ask Kwagi" hint="AI study buddy" tint={c.purple} onPress={() => router.navigate('/chat')} />
+            <QuickAction icon="document-text" label="Notes" hint="Your reviewer" tint={c.teal} onPress={() => router.navigate('/notes')} />
+            <QuickAction icon="stats-chart" label="Progress" hint="Track your stats" tint={c.green} onPress={() => router.navigate('/progress')} />
           </View>
         </FadeIn>
 
-        {/* Due for review */}
-        <FadeIn index={5}>
-          <Card className="mb-5" glow={due > 0 ? c.amber : undefined}>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-md font-bold tracking-tight text-ink">Due for Review</Text>
-              <View className="rounded-pill bg-amber px-2.5 py-1">
-                <Text className="text-xs font-bold text-bg">{due} cards</Text>
-              </View>
-            </View>
-            <Text className="mt-2 text-sm text-sub">
-              {due > 0 ? 'May mga card na due ngayon. Tara, balikan natin!' : 'Wala pang due — good job!'}
-            </Text>
-            {due > 0 && (
-              <Pressable
-                onPress={() => router.navigate('/quiz')}
-                accessibilityRole="button"
-                accessibilityLabel="Review due cards"
-                className="mt-3 flex-row items-center self-start rounded-pill bg-amberdim px-4 py-2"
-              >
-                <Text className="text-sm font-bold text-amber">Review now</Text>
-                <Ionicons name="arrow-forward" size={15} color={c.amber} style={{ marginLeft: 4 }} />
-              </Pressable>
-            )}
-          </Card>
-        </FadeIn>
-
         {/* Board selector */}
-        <FadeIn index={6}>
-          <Text className="mb-2 text-md font-bold tracking-tight text-ink">Anong exam?</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+        <FadeIn index={7}>
+          <SectionHeader title="Exam track" subtitle={BOARDS[activeBoard].name} className="mt-7" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
             {BOARD_LIST.map((b) => {
               const active = b.id === activeBoard;
               return (
-                <Pressable
+                <PressableScale
                   key={b.id}
-                  onPress={() => setActiveBoard(b.id as BoardId)}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setActiveBoard(b.id as BoardId);
+                  }}
+                  haptic={false}
                   accessibilityRole="button"
                   accessibilityLabel={b.name}
-                  className={`rounded-pill border px-4 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft bg-surface'}`}
+                  accessibilityState={{ selected: active }}
+                  className={`flex-row items-center rounded-pill border px-3.5 py-2.5 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft bg-surface'}`}
                 >
-                  <Text className={`text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>
-                    {b.icon} {b.id}
-                  </Text>
-                </Pressable>
+                  <Ionicons name={b.icon} size={16} color={active ? c.amber : c.sub} />
+                  <Text className={`ml-1.5 text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{b.id}</Text>
+                </PressableScale>
               );
             })}
           </ScrollView>
-          <Text className="mt-2 text-xs text-muted">{BOARDS[activeBoard].name}</Text>
         </FadeIn>
+        </Container>
       </ScrollView>
     </Screen>
   );
@@ -186,10 +233,32 @@ export default function HomeScreen() {
 function CoachBlock({ advice, owlSize, animate }: { advice: CoachAdvice; owlSize: number; animate: boolean }) {
   const c = useThemeColors();
   const accent = c[advice.accent];
+  const { mood, setBase, flash } = useKwagiMood(advice.mood);
+
+  // Keep Kwagi's resting mood in sync with the coach's current advice.
+  useFocusEffect(
+    useCallback(() => {
+      setBase(advice.mood);
+    }, [advice.mood, setBase]),
+  );
+
+  const poke = useCallback(() => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    flash('excited', 1100);
+  }, [flash]);
+
   return (
     <Card glow={accent}>
       <View className="flex-row items-start">
-        <KwagiOwl mood={advice.mood} size={owlSize} animate={animate} />
+        <PressableScale
+          onPress={poke}
+          haptic={false}
+          pressedScale={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Poke Kwagi"
+        >
+          <KwagiOwl mood={mood} size={owlSize} animate={animate} />
+        </PressableScale>
         <View className="ml-1 flex-1">
           <Text className="text-md font-extrabold tracking-tight" style={{ color: accent }}>
             {advice.title}
@@ -210,72 +279,67 @@ function CoachBlock({ advice, owlSize, animate }: { advice: CoachAdvice; owlSize
   );
 }
 
-function StatCard({
+function Divider() {
+  return <View className="h-10 w-px bg-bordersoft" />;
+}
+
+function StatColumn({
   icon,
-  badge,
   tint,
   value,
   label,
-  small = false,
-  glow,
 }: {
-  icon?: keyof typeof Ionicons.glyphMap;
-  badge?: string;
-  tint?: string;
-  value: string;
+  icon: IconName;
+  tint: string;
+  value: number | string;
   label: string;
-  small?: boolean;
-  glow?: string;
 }) {
-  const c = useThemeColors();
-  const iconTint = tint ?? c.ink;
   return (
-    <Card elevated className="flex-1 items-center" glow={glow}>
-      {icon ? (
-        <View className="h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: `${iconTint}1F` }}>
-          <Ionicons name={icon} size={20} color={iconTint} />
-        </View>
+    <View className="flex-1 items-center px-1">
+      <IconBadge name={icon} color={tint} box={36} size={18} />
+      {typeof value === 'number' ? (
+        <CountUp
+          value={value}
+          className="mt-2 text-lg font-extrabold tracking-tight text-ink"
+          numberOfLines={1}
+        />
       ) : (
-        <Text className="text-2xl">{badge}</Text>
+        <Text className="mt-2 text-lg font-extrabold tracking-tight text-ink" numberOfLines={1}>
+          {value}
+        </Text>
       )}
-      <Text className={`mt-1.5 font-extrabold tracking-tight text-ink ${small ? 'text-sm' : 'text-xl'}`} numberOfLines={1}>
-        {value}
+      <Text className="text-xs text-sub" numberOfLines={1}>
+        {label}
       </Text>
-      <Text className="text-xs text-sub">{label}</Text>
-    </Card>
+    </View>
   );
 }
 
 function QuickAction({
   icon,
   label,
+  hint,
   tint,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
+  hint: string;
   tint: string;
   onPress: () => void;
 }) {
-  const c = useThemeColors();
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      className="min-h-[92px] flex-1 basis-[46%] items-start justify-between rounded-card border border-bordersoft bg-surface p-4"
-      style={{
-        shadowColor: c.shadow,
-        shadowOpacity: 1,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 4,
-      }}
+      className="min-h-[112px] flex-1 basis-[46%] justify-between rounded-card border border-bordersoft bg-surface p-4"
     >
-      <View className="h-11 w-11 items-center justify-center rounded-full" style={{ backgroundColor: `${tint}1F` }}>
-        <Ionicons name={icon} size={22} color={tint} />
+      <IconBadge name={icon} color={tint} box={44} />
+      <View>
+        <Text className="text-md font-bold tracking-tight text-ink">{label}</Text>
+        <Text className="mt-0.5 text-xs text-muted">{hint}</Text>
       </View>
-      <Text className="mt-2 text-md font-bold tracking-tight text-ink">{label}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }

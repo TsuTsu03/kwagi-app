@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -9,8 +9,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useThemeColors } from '@/hooks/useTheme';
+import { useTablet } from '@/hooks/useTablet';
 
 type IconName = keyof typeof Ionicons.glyphMap;
+
+/** Width of the left navigation rail shown on tablets. */
+export const RAIL_WIDTH = 92;
 
 /**
  * Minimal shape of the props expo-router passes to a custom `tabBar`.
@@ -40,6 +44,9 @@ const TABS: Record<string, { label: string; icon: IconName; center?: boolean }> 
 
 export function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const { isTablet } = useTablet();
+  const { height } = useWindowDimensions();
+  const c = useThemeColors();
 
   const press = (route: { key: string; name: string }, focused: boolean) => () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -47,10 +54,48 @@ export function TabBar({ state, navigation }: TabBarProps) {
     if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
   };
 
-  const c = useThemeColors();
+  // Tablet: a fixed left rail. It's absolutely positioned from the bottom and
+  // sized to the full window height so it spans the screen even though the
+  // navigator hands the tab bar a zero-height slot at the bottom.
+  if (isTablet) {
+    return (
+      <View
+        className="absolute left-0 bg-surface border-r border-bordersoft items-center"
+        style={{
+          bottom: 0,
+          width: RAIL_WIDTH,
+          height,
+          paddingTop: insets.top + 18,
+          paddingBottom: insets.bottom + 18,
+          zIndex: 50,
+          shadowColor: c.shadow,
+          shadowOpacity: 1,
+          shadowRadius: 18,
+          shadowOffset: { width: 6, height: 0 },
+        }}
+      >
+        <Text className="font-extrabold tracking-tighter text-xl text-amber">Kw</Text>
+        <View className="mt-6 flex-1 justify-center gap-2.5">
+          {state.routes.map((route, index) => {
+            const meta = TABS[route.name];
+            if (!meta) return null;
+            return (
+              <RailItem
+                key={route.key}
+                meta={meta}
+                focused={state.index === index}
+                onPress={press(route, state.index === index)}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View
-      className="flex-row border-t border-bordersoft bg-surface"
+      className="border-t border-bordersoft bg-surface"
       style={{
         paddingBottom: Math.max(insets.bottom, 10),
         paddingTop: 10,
@@ -60,16 +105,44 @@ export function TabBar({ state, navigation }: TabBarProps) {
         shadowOffset: { width: 0, height: -6 },
       }}
     >
-      {state.routes.map((route, index) => {
-        const meta = TABS[route.name];
-        if (!meta) return null;
-        const focused = state.index === index;
-        if (meta.center) {
-          return <CenterItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
-        }
-        return <TabItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
-      })}
+      <View className="w-full flex-row">
+        {state.routes.map((route, index) => {
+          const meta = TABS[route.name];
+          if (!meta) return null;
+          const focused = state.index === index;
+          if (meta.center) {
+            return <CenterItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
+          }
+          return <TabItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
+        })}
+      </View>
     </View>
+  );
+}
+
+function RailItem({
+  meta,
+  focused,
+  onPress,
+}: {
+  meta: { label: string; icon: IconName };
+  focused: boolean;
+  onPress: () => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={meta.label}
+      accessibilityState={{ selected: focused }}
+      className={`w-16 items-center rounded-2xl py-2.5 ${focused ? 'bg-amberdim' : ''}`}
+    >
+      <Ionicons name={meta.icon} size={24} color={focused ? c.amber : c.muted} />
+      <Text className="mt-1 text-xs tracking-tight" style={{ color: focused ? c.amber : c.muted }}>
+        {meta.label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -106,10 +179,7 @@ function TabItem({
       className="flex-1 items-center justify-center"
     >
       <View className="h-9 items-center justify-center">
-        <Animated.View
-          className="absolute h-9 w-14 rounded-pill bg-amberdim"
-          style={pillStyle}
-        />
+        <Animated.View className="absolute h-9 w-14 rounded-pill bg-amberdim" style={pillStyle} />
         <Animated.View style={iconStyle}>
           <Ionicons name={meta.icon} size={23} color={focused ? c.amber : c.muted} />
         </Animated.View>

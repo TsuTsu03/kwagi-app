@@ -2,6 +2,10 @@
  * Philippine board exam categories + their subjects.
  * `costume` maps to the accessory Kwagi wears for each board (see KwagiCostume).
  */
+import type { Ionicons } from '@expo/vector-icons';
+
+export type BoardIcon = keyof typeof Ionicons.glyphMap;
+
 export type BoardId =
   | 'NLE'
   | 'ECE'
@@ -15,7 +19,8 @@ export type BoardId =
 export interface Board {
   id: BoardId;
   name: string;
-  icon: string;
+  /** Ionicons glyph name — never an emoji. */
+  icon: BoardIcon;
   color: string;
   subjects: string[];
   costume: string;
@@ -25,7 +30,7 @@ export const BOARDS: Record<BoardId, Board> = {
   NLE: {
     id: 'NLE',
     name: 'Nursing (NLE)',
-    icon: '🏥',
+    icon: 'medkit',
     color: '#2DD4BF',
     subjects: [
       'Fundamentals',
@@ -40,7 +45,7 @@ export const BOARDS: Record<BoardId, Board> = {
   ECE: {
     id: 'ECE',
     name: 'Engineering (ECE)',
-    icon: '⚡',
+    icon: 'hardware-chip',
     color: '#F5A623',
     subjects: [
       'Mathematics',
@@ -55,7 +60,7 @@ export const BOARDS: Record<BoardId, Board> = {
   ME: {
     id: 'ME',
     name: 'Engineering (ME)',
-    icon: '⚙️',
+    icon: 'cog',
     color: '#9B8DF0',
     subjects: [
       'Engineering Mechanics',
@@ -69,7 +74,7 @@ export const BOARDS: Record<BoardId, Board> = {
   CE: {
     id: 'CE',
     name: 'Engineering (CE)',
-    icon: '🏗️',
+    icon: 'construct',
     color: '#4ADE80',
     subjects: [
       'Structural Engineering',
@@ -83,7 +88,7 @@ export const BOARDS: Record<BoardId, Board> = {
   CPA: {
     id: 'CPA',
     name: 'Accountancy (CPA)',
-    icon: '📊',
+    icon: 'calculator',
     color: '#F5A623',
     subjects: [
       'Financial Accounting',
@@ -98,7 +103,7 @@ export const BOARDS: Record<BoardId, Board> = {
   PLE: {
     id: 'PLE',
     name: 'Medicine (PLE)',
-    icon: '⚕️',
+    icon: 'medical',
     color: '#FF6B6B',
     subjects: [
       'Internal Medicine',
@@ -113,7 +118,7 @@ export const BOARDS: Record<BoardId, Board> = {
   ARE: {
     id: 'ARE',
     name: 'Architecture (ARE)',
-    icon: '🏛️',
+    icon: 'compass',
     color: '#C084FC',
     subjects: [
       'Architectural Design',
@@ -127,7 +132,7 @@ export const BOARDS: Record<BoardId, Board> = {
   BAR: {
     id: 'BAR',
     name: 'Bar Examination',
-    icon: '⚖️',
+    icon: 'library',
     color: '#94A3B8',
     subjects: [
       'Political Law',

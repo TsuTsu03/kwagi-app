@@ -28,6 +28,27 @@ export function filipinoDate(d = new Date()): string {
   return `${DAYS_FIL[d.getDay()]}, ${MONTHS_FIL[d.getMonth()]} ${d.getDate()}`;
 }
 
+const DAYS_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** App-chrome date in professional English, e.g. "Tuesday, June 16". */
+export function formatDate(d = new Date()): string {
+  return `${DAYS_EN[d.getDay()]}, ${MONTHS_EN[d.getMonth()]} ${d.getDate()}`;
+}
+
 export type DayPart = 'morning' | 'afternoon' | 'evening' | 'late';
 
 export function dayPart(d = new Date()): DayPart {

@@ -4,7 +4,6 @@ import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { useThemeColors } from '@/hooks/useTheme';
@@ -32,6 +31,22 @@ const VARIANT_TEXT: Record<Variant, string> = {
   ghost: 'text-amber',
 };
 
+/** Mix a hex color toward black by `amt` (0..1) to make the depress "lip". */
+function darken(hex: string, amt: number): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = Math.round(((n >> 16) & 255) * (1 - amt));
+  const g = Math.round(((n >> 8) & 255) * (1 - amt));
+  const b = Math.round((n & 255) * (1 - amt));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+const LIFT = 4; // height of the 3D "lip"
+
+/**
+ * A tactile, Duolingo-style button: the colored face sits on a darker lip and
+ * physically drops down onto it when pressed (the lip disappears under the
+ * face), instead of just scaling. Ghost has no lip — it stays flat.
+ */
 export function Button({
   label,
   variant = 'primary',
@@ -44,54 +59,46 @@ export function Button({
   ...rest
 }: Props) {
   const c = useThemeColors();
-  const scale = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const press = useSharedValue(0);
+  const faceStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: press.value * LIFT }],
+  }));
 
-  // Soft floating shadow so the button reads like a pressable "bubble".
-  const shadow =
-    disabled || variant === 'ghost'
-      ? undefined
-      : variant === 'primary'
-        ? {
-            shadowColor: c.amber,
-            shadowOpacity: 0.45,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 8,
-          }
-        : {
-            shadowColor: c.shadow,
-            shadowOpacity: 1,
-            shadowRadius: 14,
-            shadowOffset: { width: 0, height: 6 },
-            elevation: 4,
-          };
+  const flat = variant === 'ghost';
+  const lip =
+    variant === 'primary' ? darken(c.amber, 0.28) : variant === 'secondary' ? c.border : 'transparent';
 
   return (
-    <Animated.View style={[style, shadow, fullWidth ? { width: '100%' } : undefined]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        disabled={disabled}
-        onPressIn={() => (scale.value = withTiming(0.95, { duration: 90 }))}
-        onPressOut={() => {
-          // Gentle bubble pop on release.
-          scale.value = withSequence(
-            withTiming(1.03, { duration: 120 }),
-            withTiming(1, { duration: 120 }),
-          );
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPressIn={() => (press.value = withTiming(1, { duration: 60 }))}
+      onPressOut={() => (press.value = withTiming(0, { duration: 110 }))}
+      onPress={(e) => {
+        if (haptic) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress?.(e);
+      }}
+      className={`${fullWidth ? 'w-full' : ''} ${disabled ? 'opacity-40' : ''} ${className}`}
+      {...rest}
+    >
+      {/* Base / lip: the face drops onto this when pressed. */}
+      <View
+        style={{
+          borderRadius: 999,
+          backgroundColor: lip,
+          paddingBottom: flat ? 0 : LIFT,
         }}
-        onPress={(e) => {
-          if (haptic) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onPress?.(e);
-        }}
-        className={`min-h-[54px] flex-row items-center justify-center rounded-pill px-6 py-3.5 ${VARIANT_BG[variant]} ${disabled ? 'opacity-40' : ''} ${className}`}
-        {...rest}
       >
-        {icon ? <View className="mr-2">{icon}</View> : null}
-        <Text className={`text-md font-bold tracking-tight ${VARIANT_TEXT[variant]}`}>{label}</Text>
-      </Pressable>
-    </Animated.View>
+        <Animated.View
+          style={[faceStyle]}
+          className={`min-h-[52px] flex-row items-center justify-center rounded-pill px-6 py-3 ${VARIANT_BG[variant]}`}
+        >
+          {icon ? <View className="mr-2">{icon}</View> : null}
+          <Text className={`text-md font-bold tracking-tight ${VARIANT_TEXT[variant]}`}>{label}</Text>
+        </Animated.View>
+      </View>
+    </Pressable>
   );
 }
 

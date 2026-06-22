@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import { colorScheme } from 'nativewind';
 import { useAppStore } from '@/lib/store';
 import { getDb } from '@/lib/db/client';
+import { PeekingKwagi } from '@/components/kwagi/PeekingKwagi';
 import { useThemeColors, useIsDark } from '@/hooks/useTheme';
 
 export default function RootLayout() {
@@ -38,6 +39,8 @@ export default function RootLayout() {
         >
           <Stack.Screen name="(tabs)" />
         </Stack>
+        {/* Omnipresent study buddy — one instance, floats above every screen. */}
+        <PeekingKwagi />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

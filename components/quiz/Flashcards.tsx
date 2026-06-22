@@ -10,7 +10,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
 import { Screen } from '@/components/ui/Screen';
+import { Container } from '@/components/ui/Container';
 import { Button } from '@/components/ui/Button';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { getDueCards, reviewCard, type Flashcard } from '@/lib/db/flashcards';
 import { recordStudy } from '@/lib/db/progress';
@@ -81,7 +83,7 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
       <Screen>
         <View className="flex-1 items-center justify-center">
           <KwagiOwl mood="thinking" size={120} animate={animate} />
-          <Text className="mt-4 text-sub">Kinukuha ang cards...</Text>
+          <Text className="mt-4 text-sub">Loading cards...</Text>
         </View>
       </Screen>
     );
@@ -92,21 +94,21 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
   if (cards.length === 0 || done) {
     return (
       <Screen>
-        <View className="flex-1 items-center justify-center p-6">
+        <Container className="flex-1 items-center justify-center p-6">
           <KwagiOwl mood={reviewed > 0 ? 'excited' : 'sleepy'} size={140} animate={animate} />
           <Text className="mt-4 text-xl font-extrabold tracking-tighter text-ink">
             {reviewed > 0 ? 'Tapos na!' : 'Wala pang due'}
           </Text>
           <Text className="mt-1 text-center text-sm text-sub leading-5">
             {reviewed > 0
-              ? `Na-review mo ${reviewed} cards. Balik ka bukas para sa next batch! 🦉`
+              ? `Na-review mo ${reviewed} cards. Balik ka bukas para sa next batch!`
               : 'Lahat ng cards ay na-review na. Good job — break muna!'}
           </Text>
           <View className="mt-6 w-full gap-3">
             <Button label="Back to Quiz" onPress={onExit} />
             <Button label="Home" variant="secondary" onPress={() => router.navigate('/')} />
           </View>
-        </View>
+        </Container>
       </Screen>
     );
   }
@@ -116,7 +118,7 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
 
   return (
     <Screen>
-      <View className="flex-1 p-4">
+      <Container className="flex-1 p-4">
         <View className="mb-3 flex-row items-center justify-between">
           <Pressable onPress={onExit} accessibilityRole="button" accessibilityLabel="Exit flashcards" className="h-10 w-10 items-center justify-center">
             <Ionicons name="close" size={26} color={c.sub} />
@@ -176,9 +178,11 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
             {RATINGS.map((r) => {
               const tint = c[r.tint] as string;
               return (
-                <Pressable
+                <PressableScale
                   key={r.action}
                   onPress={() => rate(r.action)}
+                  haptic={false}
+                  pressedScale={0.93}
                   accessibilityRole="button"
                   accessibilityLabel={r.label}
                   className="flex-1 items-center rounded-card border py-3"
@@ -187,7 +191,7 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
                   <Text className="text-sm font-bold" style={{ color: tint }}>
                     {r.label}
                   </Text>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -196,7 +200,7 @@ export function Flashcards({ onExit, animate }: { onExit: () => void; animate: b
             <Button label="Show Answer" onPress={doFlip} variant="secondary" />
           </View>
         )}
-      </View>
+      </Container>
     </Screen>
   );
 }

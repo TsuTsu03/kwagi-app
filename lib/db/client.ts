@@ -29,10 +29,13 @@ async function seedIfEmpty(db: SQLite.SQLiteDatabase): Promise<void> {
 
   const now = Date.now();
 
+  // `icon` stores an Ionicons glyph name (never an emoji) — matches the board
+  // icons in constants/boards.ts so seeded and user-created subjects render
+  // through the same <Ionicons> path.
   const sampleSubjects = [
-    { name: 'Nursing Fundamentals', board: 'NLE', color: '#2DD4BF', icon: '🏥' },
-    { name: 'Electronics Basics', board: 'ECE', color: '#F5A623', icon: '⚡' },
-    { name: 'Accounting 101', board: 'CPA', color: '#A78BFA', icon: '📊' },
+    { name: 'Nursing Fundamentals', board: 'NLE', color: '#2DD4BF', icon: 'medkit' },
+    { name: 'Electronics Basics', board: 'ECE', color: '#F5A623', icon: 'hardware-chip' },
+    { name: 'Accounting 101', board: 'CPA', color: '#A78BFA', icon: 'calculator' },
   ];
 
   const subjectIds: Record<string, string> = {};

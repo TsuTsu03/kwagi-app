@@ -1,13 +1,18 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
 import { Screen } from '@/components/ui/Screen';
+import { Container } from '@/components/ui/Container';
 import { FadeIn } from '@/components/ui/FadeIn';
 import { Card } from '@/components/ui/Card';
+import { CountUp } from '@/components/ui/CountUp';
+import { AnimatedRing } from '@/components/ui/AnimatedRing';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { Badge } from '@/components/ui/Badge';
+import { IconBadge, type IconName } from '@/components/ui/IconBadge';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAppStore } from '@/lib/store';
 import { getTotals, getStreak, type ProgressTotals } from '@/lib/db/progress';
 import { countSessions } from '@/lib/db/quiz';
@@ -21,30 +26,54 @@ export default function ProgressScreen() {
   const [totals, setTotals] = useState<ProgressTotals | null>(null);
   const [streak, setStreak] = useState(0);
   const [sessions, setSessions] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    const [t, s, sess] = await Promise.all([getTotals(), getStreak(), countSessions()]);
+    setTotals(t);
+    setStreak(s);
+    setSessions(sess);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      (async () => {
-        const [t, s, sess] = await Promise.all([getTotals(), getStreak(), countSessions()]);
-        if (!alive) return;
-        setTotals(t);
-        setStreak(s);
-        setSessions(sess);
+      void (async () => {
+        if (alive) await load();
       })();
       return () => {
         alive = false;
       };
-    }, []),
+    }, [load]),
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await load();
+    setRefreshing(false);
+  }, [load]);
 
   const xp = totals?.totalXp ?? 0;
   const level = getLevel(xp);
   const accuracy = totals?.accuracy ?? 0;
+  const accuracyTint = accuracy >= 80 ? c.green : accuracy >= 60 ? c.amber : c.coral;
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={c.amber}
+            colors={[c.amber]}
+            progressBackgroundColor={c.surface}
+          />
+        }
+      >
+        <Container>
         <FadeIn index={0}>
           <Text className="mb-4 text-2xl font-extrabold tracking-tighter text-ink">Progress</Text>
         </FadeIn>
@@ -54,71 +83,139 @@ export default function ProgressScreen() {
           <Card elevated className="mb-5 flex-row items-center" glow={c.amber}>
             <KwagiOwl mood={streak >= 7 ? 'excited' : 'happy'} size={88} animate={settings.kwagiAnimations} />
             <View className="ml-3 flex-1">
-              <Badge label={`${level.level.badge} ${level.level.name}`} color={c.amber} />
-              <Text className="mt-1 text-xl font-extrabold tracking-tight text-ink">{xp} XP</Text>
+              <View
+                className="flex-row items-center self-start rounded-pill px-2.5 py-1"
+                style={{ backgroundColor: `${c.amber}22`, borderWidth: 1, borderColor: `${c.amber}33` }}
+              >
+                <Ionicons name={level.level.icon} size={12} color={c.amber} />
+                <Text className="ml-1 text-xs font-semibold tracking-tight text-amber">{level.level.name}</Text>
+              </View>
+              <CountUp
+                value={xp}
+                format={(n) => `${n} XP`}
+                className="mt-1.5 text-xl font-extrabold tracking-tight text-ink"
+              />
               <View className="mt-2">
                 <ProgressBar progress={level.progress} color={c.amber} height={8} />
               </View>
               <Text className="mt-1 text-xs text-sub">
                 {level.nextLevel
                   ? `${level.xpForNext} XP to ${level.nextLevel.name}`
-                  : 'Max level — Board Passer ka na! 🎓'}
+                  : 'Max level reached — Board Passer!'}
               </Text>
             </View>
           </Card>
         </FadeIn>
 
-        {/* Streak */}
+        {/* Streak + accuracy — two dynamic focal cards side by side */}
         <FadeIn index={2}>
-          <Card className="mb-5 items-center" glow={streak >= 7 ? c.coral : undefined}>
-            <Text className="text-sm text-sub">Current Streak</Text>
-            <View className="mt-1 flex-row items-center">
-              <Ionicons name="flame" size={28} color={c.coral} />
-              <Text className="ml-1.5 text-3xl font-extrabold tracking-tighter text-amber">{streak}</Text>
-            </View>
-            <Text className="mt-1 text-xs text-muted">
-              {streak >= 7 ? 'Sunog na sunog! Tuloy lang!' : 'Mag-aral araw-araw para tumaas!'}
-            </Text>
-          </Card>
+          <View className="mb-5 flex-row gap-3">
+            <Card className="flex-1 items-center justify-center" glow={streak >= 7 ? c.coral : undefined}>
+              <Text className="text-sm text-sub">Streak</Text>
+              <View className="mt-1 flex-row items-center">
+                <Ionicons name="flame" size={26} color={c.coral} />
+                <CountUp
+                  value={streak}
+                  className="ml-1.5 text-3xl font-extrabold tracking-tighter text-amber"
+                />
+              </View>
+              <Text className="mt-1 text-center text-xs text-muted">
+                {streak >= 7 ? 'On fire — keep it up!' : 'Study daily to grow it.'}
+              </Text>
+            </Card>
+            <Card className="flex-1 items-center justify-center">
+              <AnimatedRing
+                progress={accuracy / 100}
+                size={104}
+                stroke={9}
+                color={accuracyTint}
+                colorTo={accuracyTint}
+              >
+                <View className="items-center">
+                  <CountUp
+                    value={accuracy}
+                    format={(n) => `${n}%`}
+                    className="text-xl font-extrabold tracking-tight"
+                    style={{ color: accuracyTint }}
+                  />
+                  <Text className="text-xs text-sub">Accuracy</Text>
+                </View>
+              </AnimatedRing>
+            </Card>
+          </View>
         </FadeIn>
 
         {/* Stats grid */}
         <FadeIn index={3}>
+          <SectionHeader title="Statistics" />
           <View className="mb-5 flex-row flex-wrap gap-3">
-            <Stat icon="albums" label="Cards Studied" value={String(totals?.totalCardsStudied ?? 0)} tint={c.teal} />
-            <Stat icon="checkmark-done" label="Accuracy" value={`${accuracy}%`} tint={accuracy >= 80 ? c.green : accuracy >= 60 ? c.amber : c.coral} />
+            <Stat icon="albums" label="Cards Studied" value={totals?.totalCardsStudied ?? 0} tint={c.teal} />
             <Stat icon="time" label="Study Time" value={formatDuration(totals?.totalStudySeconds ?? 0)} tint={c.indigo} />
-            <Stat icon="help-circle" label="Questions" value={String(totals?.totalQuestions ?? 0)} tint={c.purple} />
-            <Stat icon="school" label="Quizzes Done" value={String(sessions)} tint={c.amber} />
-            <Stat icon="flash" label="Total XP" value={String(xp)} tint={c.amber} />
+            <Stat icon="help-circle" label="Questions" value={totals?.totalQuestions ?? 0} tint={c.purple} />
+            <Stat icon="school" label="Quizzes Done" value={sessions} tint={c.amber} />
+            <Stat icon="flash" label="Total XP" value={xp} tint={c.amber} />
+            <Stat icon="trophy" label="Level" value={level.level.name} tint={c.purple} />
           </View>
         </FadeIn>
 
-        {/* Level path */}
+        {/* Level path — a connected climb from Freshie to Board Passer */}
         <FadeIn index={4}>
-          <Text className="mb-2 text-md font-bold tracking-tight text-ink">Levels</Text>
+          <SectionHeader title="Level path" />
           <Card>
-            {LEVELS.map((lvl, i) => {
-              const reached = xp >= lvl.minXp;
-              const current = i === level.levelIndex;
-              return (
-                <View
-                  key={lvl.name}
-                  className={`flex-row items-center justify-between py-2.5 ${i < LEVELS.length - 1 ? 'border-b border-bordersoft' : ''}`}
-                >
-                  <View className="flex-row items-center">
-                    <Text className="text-lg">{lvl.badge}</Text>
-                    <Text className={`ml-2 text-md ${current ? 'font-extrabold text-amber' : reached ? 'text-ink' : 'text-muted'}`}>
-                      {lvl.name}
-                    </Text>
-                    {current && <Text className="ml-2 text-xs text-amber">← ikaw</Text>}
+            <View className="relative">
+              {/* vertical track behind the nodes */}
+              <View className="absolute left-5 top-4 bottom-4 w-0.5 bg-border" />
+              {LEVELS.map((lvl, i) => {
+                const reached = xp >= lvl.minXp;
+                const current = i === level.levelIndex;
+                const done = reached && !current;
+                const nodeBg = current ? c.amber : done ? c.teal : c.surface;
+                const nodeIcon = done ? 'checkmark' : current ? lvl.icon : 'lock-closed';
+                const iconColor = current || done ? c.bg : c.muted;
+                return (
+                  <View
+                    key={lvl.name}
+                    className={`relative z-10 flex-row items-center ${i < LEVELS.length - 1 ? 'mb-4' : ''}`}
+                  >
+                    <View
+                      className="h-10 w-10 items-center justify-center rounded-full border-4"
+                      style={{
+                        backgroundColor: nodeBg,
+                        borderColor: c.surface,
+                        ...(current
+                          ? {
+                              shadowColor: c.amber,
+                              shadowOpacity: 0.5,
+                              shadowRadius: 10,
+                              shadowOffset: { width: 0, height: 0 },
+                              elevation: 6,
+                            }
+                          : null),
+                      }}
+                    >
+                      <Ionicons name={nodeIcon} size={18} color={iconColor} />
+                    </View>
+                    <View className="ml-3 flex-1 flex-row items-center justify-between">
+                      <Text
+                        className={`text-md ${current ? 'font-extrabold text-amber' : done ? 'text-ink' : 'text-muted'}`}
+                      >
+                        {lvl.name}
+                      </Text>
+                      {current ? (
+                        <View className="rounded-pill bg-amberdim px-2 py-0.5">
+                          <Text className="text-xs font-bold tracking-tight text-amber">Current</Text>
+                        </View>
+                      ) : (
+                        <Text className="text-xs text-sub">{lvl.minXp}+ XP</Text>
+                      )}
+                    </View>
                   </View>
-                  <Text className="text-xs text-sub">{lvl.minXp}+ XP</Text>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </Card>
         </FadeIn>
+        </Container>
       </ScrollView>
     </Screen>
   );
@@ -132,19 +229,21 @@ function Stat({
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  value: string;
+  value: number | string;
   tint?: string;
 }) {
   const c = useThemeColors();
   const color = tint ?? c.ink;
   return (
     <View className="min-w-[30%] flex-1 basis-[30%] items-center rounded-card border border-bordersoft bg-surface p-3">
-      <View className="h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: `${color}1F` }}>
-        <Ionicons name={icon} size={16} color={color} />
-      </View>
-      <Text className="mt-1.5 text-lg font-extrabold tracking-tight" style={{ color }}>
-        {value}
-      </Text>
+      <IconBadge name={icon as IconName} color={color} box={32} size={16} />
+      {typeof value === 'number' ? (
+        <CountUp value={value} className="mt-1.5 text-lg font-extrabold tracking-tight" style={{ color }} />
+      ) : (
+        <Text className="mt-1.5 text-lg font-extrabold tracking-tight" style={{ color }}>
+          {value}
+        </Text>
+      )}
       <Text className="mt-0.5 text-center text-xs text-sub">{label}</Text>
     </View>
   );
