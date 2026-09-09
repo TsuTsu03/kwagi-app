@@ -14,7 +14,7 @@ import Animated, {
 import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useKwagiMood } from '@/hooks/useKwagiMood';
-import { useAppStore } from '@/lib/store';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 import { useThemeColors } from '@/hooks/useTheme';
 import { randomPeek, randomPoke } from '@/constants/dialogues';
 import { getPeekContext, peekAdvice, type PeekAdvice } from '@/lib/peek';
@@ -63,7 +63,7 @@ const SLOT_IDS: SlotId[] = ['right', 'left', 'bottomRight', 'bottomLeft'];
  */
 export function PeekingKwagi() {
   const { height } = useWindowDimensions();
-  const animate = useAppStore((s) => s.settings.kwagiAnimations);
+  const animate = useAnimationsEnabled();
   const c = useThemeColors();
   const { mood, setBase, flash } = useKwagiMood('happy');
 
@@ -72,7 +72,9 @@ export function PeekingKwagi() {
   const [route, setRoute] = useState<PeekAdvice['route']>(undefined);
   const t = useSharedValue(0);
   const wiggle = useSharedValue(0);
+  const spin = useSharedValue(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pokeTimes = useRef<number[]>([]);
 
   const slots = buildSlots(height);
   const cfg = slots[slot];
@@ -101,7 +103,6 @@ export function PeekingKwagi() {
     if (!animate) {
       // Resting peek — always visible in the corner, no cycle, but still
       // shows a contextual hello so he's never blank.
-      setSlot('bottomRight');
       t.value = 1;
       void (async () => {
         try {
@@ -158,13 +159,13 @@ export function PeekingKwagi() {
       timers.current.forEach(clearTimeout);
       timers.current = [];
     };
-  }, [animate, height]);
+  }, [animate, height, setBase, t]);
 
   const style = useAnimatedStyle(() => {
     const v = hidden + (shown - hidden) * t.value;
     const sign = slot === 'right' || slot === 'bottomRight' ? 1 : -1;
     const scale = 0.9 + 0.1 * t.value;
-    const rot = `${wiggle.value}deg`;
+    const rot = `${wiggle.value + spin.value}deg`;
     return {
       opacity: 0.4 + 0.6 * t.value,
       transform:
@@ -178,6 +179,21 @@ export function PeekingKwagi() {
 
   const poke = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Easter egg: three quick pokes send Kwagi into a dizzy full spin.
+    const now = Date.now();
+    pokeTimes.current = [...pokeTimes.current.filter((ts) => now - ts < 1600), now];
+    if (animate && pokeTimes.current.length >= 3) {
+      pokeTimes.current = [];
+      spin.value = 0;
+      spin.value = withTiming(360, { duration: 750, easing: Easing.out(Easing.cubic) }, (done) => {
+        if (done) spin.value = 0;
+      });
+      flash('excited', 1600);
+      setLine('Wooo! Nahilo ako, hihi!');
+      return;
+    }
+
     wiggle.value = withSequence(
       withTiming(-8, { duration: 70 }),
       withTiming(8, { duration: 90 }),

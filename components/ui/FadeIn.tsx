@@ -1,6 +1,6 @@
 import React from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useAppStore } from '@/lib/store';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 interface Props {
   children: React.ReactNode;
@@ -17,7 +17,7 @@ interface Props {
  * user's animation setting (renders statically when disabled).
  */
 export function FadeIn({ children, index = 0, delay = 0, className }: Props) {
-  const animate = useAppStore((s) => s.settings.kwagiAnimations);
+  const animate = useAnimationsEnabled();
   if (!animate) {
     return <Animated.View className={className}>{children}</Animated.View>;
   }

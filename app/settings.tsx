@@ -1,217 +1,84 @@
+import { showAlert } from '@/lib/alert';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/ui/Screen';
 import { Container } from '@/components/ui/Container';
-import { FadeIn } from '@/components/ui/FadeIn';
 import { Card } from '@/components/ui/Card';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppStore } from '@/lib/store';
-import { BOARD_LIST, type BoardId } from '@/constants/boards';
 import { clearAllData } from '@/lib/db/client';
 import { useThemeColors } from '@/hooks/useTheme';
-import type { ThemePref } from '@/lib/storage/settings';
+import type { AnimationPreference, ThemePref } from '@/lib/storage/settings';
 
-const GOALS = [10, 20, 30, 50, 100];
-
+const GOALS = [10, 20, 30, 50];
 const THEMES: { value: ThemePref; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: 'light', label: 'Light', icon: 'sunny' },
-  { value: 'dark', label: 'Dark', icon: 'moon' },
-  { value: 'system', label: 'System', icon: 'phone-portrait' },
+  { value: 'light', label: 'Light', icon: 'sunny' }, { value: 'dark', label: 'Dark', icon: 'moon' }, { value: 'system', label: 'System', icon: 'phone-portrait' },
+];
+const ANIMATION_OPTIONS: { value: AnimationPreference; label: string }[] = [
+  { value: 'system', label: 'Device' },
+  { value: 'on', label: 'On' },
+  { value: 'off', label: 'Off' },
 ];
 
-function SectionLabel({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
-  const c = useThemeColors();
-  return (
-    <View className="mb-2 flex-row items-center">
-      <Ionicons name={icon} size={13} color={c.sub} />
-      <Text className="ml-1.5 text-sm font-bold tracking-tight text-sub">{label}</Text>
-    </View>
-  );
-}
-
 export default function SettingsScreen() {
-  const { settings, updateSettings, setActiveBoard, setDailyGoal } = useAppStore();
+  const { settings, updateSettings, setDailyGoal, reset } = useAppStore();
   const c = useThemeColors();
   const [busy, setBusy] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [name, setName] = useState(settings.studentName);
+  const [course, setCourse] = useState(settings.course);
+  const [year, setYear] = useState(settings.yearLevel);
 
-  const confirmClear = () => {
-    Alert.alert(
-      'Clear all data?',
-      'This permanently deletes all your notes, cards, and progress. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy(true);
-            await clearAllData();
-            setBusy(false);
-            Alert.alert('Done', 'Data cleared. Restart the app to re-seed sample data.');
-          },
-        },
-      ],
-    );
+  const saveProfile = async () => {
+    try { await updateSettings({ studentName: name.trim(), course: course.trim(), yearLevel: year.trim() }); showAlert('Profile saved'); }
+    catch { showAlert('Could not save profile', 'Your profile could not be stored. Please try again.'); }
+  };
+  const persistPreference = (patch: Parameters<typeof updateSettings>[0]) => {
+    void updateSettings(patch).catch(() => showAlert('Could not save preference', 'The change may not persist after you close Kwagi. Please try again.'));
+  };
+  const persistGoal = (goal: number) => {
+    void setDailyGoal(goal).catch(() => showAlert('Could not save goal', 'The change may not persist after you close Kwagi. Please try again.'));
+  };
+  const clear = async () => {
+    if (busy) return;
+    setBusy(true);
+    let databaseCleared = false;
+    try { await clearAllData(false); databaseCleared = true; await reset(); router.replace('/onboarding'); }
+    catch { showAlert(databaseCleared ? 'Preferences could not reset' : 'Could not clear data', databaseCleared ? 'Study data was removed, but preferences may remain. Close and reopen Kwagi, then try Clear all data again.' : 'Kwagi could not remove your data. Please try again.'); }
+    finally { setBusy(false); setConfirmingClear(false); }
   };
 
   return (
     <Screen rail={false}>
-      <View className="flex-row items-center border-b border-bordersoft p-4">
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" className="h-10 w-10 items-center justify-center">
-          <Ionicons name="chevron-back" size={26} color={c.sub} />
-        </Pressable>
-        <Text className="ml-1 text-md font-bold tracking-tight text-ink">Settings</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <Container>
-        {/* Appearance */}
-        <FadeIn index={0}>
-          <SectionLabel icon="color-palette" label="APPEARANCE" />
-          <Card className="mb-5">
-            <Text className="text-md text-ink">Theme</Text>
-            <Text className="mb-3 text-xs text-muted">Choose what's easiest on your eyes</Text>
-            <View className="flex-row gap-2">
-              {THEMES.map((t) => {
-                const active = settings.themePref === t.value;
-                return (
-                  <PressableScale
-                    key={t.value}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      updateSettings({ themePref: t.value });
-                    }}
-                    haptic={false}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t.label} theme`}
-                    accessibilityState={{ selected: active }}
-                    className={`flex-1 items-center rounded-card border py-3 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft bg-surface'}`}
-                  >
-                    <Ionicons name={t.icon} size={20} color={active ? c.amber : c.sub} />
-                    <Text className={`mt-1.5 text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{t.label}</Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-          </Card>
-        </FadeIn>
-
-        {/* Kwagi */}
-        <FadeIn index={1}>
-          <SectionLabel icon="happy" label="KWAGI" />
-          <Card className="mb-5">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-md text-ink">Animations</Text>
-                <Text className="text-xs text-muted">Owl breathing, glows, and smooth transitions</Text>
-              </View>
-              <Switch
-                value={settings.kwagiAnimations}
-                onValueChange={(v) => updateSettings({ kwagiAnimations: v })}
-                trackColor={{ true: c.amber, false: c.border }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </Card>
-        </FadeIn>
-
-        {/* Study */}
-        <FadeIn index={2}>
-          <SectionLabel icon="book" label="STUDY" />
-          <Card className="mb-5">
-            <Text className="text-md text-ink">Daily Goal (cards)</Text>
-            <View className="mt-3 flex-row flex-wrap gap-2">
-              {GOALS.map((g) => {
-                const active = settings.dailyGoal === g;
-                return (
-                  <PressableScale
-                    key={g}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      setDailyGoal(g);
-                    }}
-                    haptic={false}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Daily goal ${g}`}
-                    className={`rounded-pill border px-4 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}
-                  >
-                    <Text className={active ? 'font-bold text-amber' : 'text-sub'}>{g}</Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-
-            <Text className="mb-2 mt-4 text-md text-ink">Active Board</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {BOARD_LIST.map((b) => {
-                const active = settings.activeBoard === b.id;
-                return (
-                  <PressableScale
-                    key={b.id}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      setActiveBoard(b.id as BoardId);
-                    }}
-                    haptic={false}
-                    accessibilityRole="button"
-                    accessibilityLabel={b.name}
-                    className={`flex-row items-center rounded-pill border px-3.5 py-2 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}
-                  >
-                    <Ionicons name={b.icon} size={15} color={active ? c.amber : c.sub} />
-                    <Text className={`ml-1.5 ${active ? 'font-bold text-amber' : 'text-sub'}`}>{b.id}</Text>
-                  </PressableScale>
-                );
-              })}
-            </View>
-          </Card>
-        </FadeIn>
-
-        {/* AI */}
-        <FadeIn index={3}>
-          <SectionLabel icon="sparkles" label="AI" />
-          <Card className="mb-5">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text className="text-md text-ink">AI Features</Text>
-                <Text className="text-xs text-muted">Chat, quiz-gen, summarize (needs API key — coming soon)</Text>
-              </View>
-              <Switch
-                value={settings.aiEnabled}
-                onValueChange={(v) => updateSettings({ aiEnabled: v })}
-                trackColor={{ true: c.amber, false: c.border }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </Card>
-        </FadeIn>
-
-        {/* Data */}
-        <FadeIn index={4}>
-          <SectionLabel icon="server" label="DATA" />
-          <Card className="mb-5">
-            <Pressable className="flex-row items-center" onPress={confirmClear} disabled={busy} accessibilityRole="button" accessibilityLabel="Clear all data">
-              <Ionicons name="trash" size={18} color={c.coral} />
-              <Text className="ml-2 text-md text-coral">{busy ? 'Clearing...' : 'Clear all data'}</Text>
-            </Pressable>
-          </Card>
-        </FadeIn>
-
-        {/* About */}
-        <FadeIn index={5}>
-          <SectionLabel icon="information-circle" label="ABOUT" />
-          <Card>
-            <Text className="text-md font-bold tracking-tight text-ink">Kwagi — Your Study Buddy</Text>
-            <Text className="mt-1 text-xs text-sub">v1.0.0</Text>
-            <Text className="mt-2 text-xs text-muted">
-              Kwagi is inspired by the Philippine Kwago (Barn Owl).
-            </Text>
-          </Card>
-        </FadeIn>
-        </Container>
-      </ScrollView>
+      <View className="flex-row items-center border-b border-bordersoft p-4"><Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" className="h-11 w-11 items-center justify-center"><Ionicons name="chevron-back" size={26} color={c.sub} /></Pressable><Text className="ml-1 text-md font-bold text-ink">Settings</Text></View>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled"><Container>
+        <Section label="STUDENT PROFILE" icon="person">
+          <TextInput value={name} onChangeText={setName} accessibilityLabel="Preferred name" placeholder="Preferred name" placeholderTextColor={c.muted} className="mb-2 min-h-11 rounded-card border border-bordersoft bg-card px-3 text-md text-ink" />
+          <TextInput value={course} onChangeText={setCourse} accessibilityLabel="Course or program" placeholder="Course or program" placeholderTextColor={c.muted} className="mb-2 min-h-11 rounded-card border border-bordersoft bg-card px-3 text-md text-ink" />
+          <TextInput value={year} onChangeText={setYear} accessibilityLabel="Year level" placeholder="Year level (optional)" placeholderTextColor={c.muted} className="min-h-11 rounded-card border border-bordersoft bg-card px-3 text-md text-ink" />
+          <PressableScale onPress={() => void saveProfile()} className="mt-3 items-center rounded-card bg-amber py-3" accessibilityRole="button"><Text className="font-bold text-bg">Save profile</Text></PressableScale>
+        </Section>
+        <Section label="APPEARANCE" icon="color-palette">
+          <Text className="mb-3 text-md text-ink">Theme</Text><View className="flex-row gap-2">{THEMES.map((theme) => { const active = settings.themePref === theme.value; return <PressableScale key={theme.value} onPress={() => { void Haptics.selectionAsync(); persistPreference({ themePref: theme.value }); }} haptic={false} accessibilityRole="button" accessibilityState={{ selected: active }} className={`flex-1 items-center rounded-card border py-3 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Ionicons name={theme.icon} size={20} color={active ? c.amber : c.sub} /><Text className={`mt-1 text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{theme.label}</Text></PressableScale>; })}</View>
+          <Text className="mb-2 mt-4 text-md text-ink">Animations</Text>
+          <Text className="mb-3 text-xs leading-5 text-muted">Device follows your operating-system Reduce Motion setting.</Text>
+          <View className="flex-row gap-2">{ANIMATION_OPTIONS.map((option) => { const active = settings.animationPreference === option.value; return <PressableScale key={option.value} onPress={() => persistPreference({ animationPreference: option.value })} accessibilityRole="button" accessibilityState={{ selected: active }} className={`min-h-11 flex-1 items-center justify-center rounded-card border ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={`text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{option.label}</Text></PressableScale>; })}</View>
+        </Section>
+        <Section label="STUDY" icon="book"><Text className="text-md text-ink">Daily goal</Text><Text className="mt-1 text-sm text-sub">Card reviews and quiz answers count toward your goal.</Text><View className="mt-3 flex-row flex-wrap gap-2">{GOALS.map((goal) => <PressableScale key={goal} onPress={() => persistGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: settings.dailyGoal === goal }} className={`min-h-11 justify-center rounded-pill border px-4 py-2 ${settings.dailyGoal === goal ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={settings.dailyGoal === goal ? 'font-bold text-amber' : 'text-sub'}>{goal}</Text></PressableScale>)}</View></Section>
+        <Section label="DATA & SUPPORT" icon="server">
+          <SettingLink icon="download-outline" label="Backup and restore" onPress={() => router.push('/backup')} />
+          <SettingLink icon="shield-checkmark-outline" label="Privacy and study disclaimer" onPress={() => router.push('/legal')} />
+          <SettingLink icon="trash-outline" label={busy ? 'Clearing...' : 'Clear all data'} danger disabled={busy} onPress={() => setConfirmingClear(true)} />
+          {confirmingClear && <View className="mt-3 rounded-card border border-coral bg-coral/10 p-3"><Text className="font-bold text-ink">Delete all local data?</Text><Text className="mt-1 text-sm leading-5 text-sub">This removes your notes, cards, quiz history, progress, and preferences. This cannot be undone.</Text><View className="mt-3 flex-row gap-2"><PressableScale onPress={() => void clear()} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card bg-coral"><Text className="font-bold text-bg">{busy ? 'Clearing...' : 'Delete everything'}</Text></PressableScale><PressableScale onPress={() => setConfirmingClear(false)} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card border border-bordersoft"><Text className="font-bold text-ink">Cancel</Text></PressableScale></View></View>}
+        </Section>
+        <Section label="ABOUT" icon="information-circle"><Text className="text-md font-bold text-ink">Kwagi, Your Study Buddy</Text><Text className="mt-1 text-xs text-sub">v1.0.0 · For college students in any course</Text><Text className="mt-2 text-xs leading-5 text-muted">Kwagi helps you organize subjects, practice active recall, and review consistently. It does not replace your instructors or official course materials.</Text></Section>
+      </Container></ScrollView>
     </Screen>
   );
 }
+
+function Section({ label, icon, children }: { label: string; icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode }) { const c = useThemeColors(); return <View className="mb-5"><View className="mb-2 flex-row items-center"><Ionicons name={icon} size={13} color={c.sub} /><Text className="ml-1.5 text-sm font-bold text-sub">{label}</Text></View><Card>{children}</Card></View>; }
+function SettingLink({ icon, label, onPress, danger = false, disabled = false }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; danger?: boolean; disabled?: boolean }) { const c = useThemeColors(); return <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityState={{ disabled }} className="min-h-12 flex-row items-center border-b border-bordersoft py-2" style={{ opacity: disabled ? 0.6 : 1 }}><Ionicons name={icon} size={19} color={danger ? c.coral : c.sub} /><Text className={`ml-2 flex-1 text-md ${danger ? 'text-coral' : 'text-ink'}`}>{label}</Text><Ionicons name="chevron-forward" size={18} color={c.muted} /></Pressable>; }

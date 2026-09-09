@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { BoardId } from '@/constants/boards';
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -11,11 +10,19 @@ interface AppState {
   settings: Settings;
   hydrated: boolean;
   hydrate: () => Promise<void>;
-  setActiveBoard: (board: BoardId) => void;
-  setDailyGoal: (goal: number) => void;
-  updateSettings: (patch: Partial<Settings>) => void;
+  setDailyGoal: (goal: number) => Promise<void>;
+  updateSettings: (patch: Partial<Settings>) => Promise<void>;
+  reset: () => Promise<void>;
   /** Stamp "studied just now" so Kwagi can balance study vs. rest advice. */
-  markStudied: () => void;
+  markStudied: () => Promise<void>;
+}
+
+let settingsWriteQueue: Promise<void> = Promise.resolve();
+
+function queueSettingsSave(settings: Settings): Promise<void> {
+  const write = settingsWriteQueue.then(() => saveSettings(settings));
+  settingsWriteQueue = write.catch(() => undefined);
+  return write;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -27,27 +34,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ settings, hydrated: true });
   },
 
-  setActiveBoard: (board) => {
-    const settings = { ...get().settings, activeBoard: board };
-    set({ settings });
-    void saveSettings(settings);
-  },
-
-  setDailyGoal: (goal) => {
+  setDailyGoal: async (goal) => {
     const settings = { ...get().settings, dailyGoal: goal };
     set({ settings });
-    void saveSettings(settings);
+    await queueSettingsSave(settings);
   },
 
-  updateSettings: (patch) => {
+  updateSettings: async (patch) => {
     const settings = { ...get().settings, ...patch };
     set({ settings });
-    void saveSettings(settings);
+    await queueSettingsSave(settings);
   },
 
-  markStudied: () => {
+  reset: async () => {
+    const settings = { ...DEFAULT_SETTINGS };
+    await queueSettingsSave(settings);
+    set({ settings, hydrated: true });
+  },
+
+  markStudied: async () => {
     const settings = { ...get().settings, lastStudyAt: Date.now() };
     set({ settings });
-    void saveSettings(settings);
+    await queueSettingsSave(settings);
   },
 }));

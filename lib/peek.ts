@@ -24,7 +24,7 @@ export interface PeekAdvice {
   /** Face that matches the line. */
   mood: KwagiMood;
   /** If set, tapping Kwagi takes you here — his call to action. */
-  route?: '/quiz' | '/notes' | '/progress' | '/chat';
+  route?: '/quiz' | '/notes' | '/progress';
 }
 
 /** Gather the live context Kwagi reacts to (3 quick reads + settings). */
@@ -66,7 +66,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
   if (hour >= 22 || hour < 5) {
     return {
       text: pick([
-        'Gabi na! Tulog muna — mas tatatak bukas.',
+        'Gabi na! Tulog muna, mas tatatak bukas.',
         'Huwag mag-puyat ha, importante ang pahinga.',
       ]),
       mood: 'sleepy',
@@ -77,7 +77,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
   if (ctx.due > 0) {
     return {
       text: pick([
-        `May ${ctx.due} ${ctx.due === 1 ? 'card' : 'cards'} na due — tara, review tayo!`,
+        `May ${ctx.due} ${ctx.due === 1 ? 'card' : 'cards'} ka na due, tara review tayo!`,
         `${ctx.due} due na cards. Pindutin mo ako, sabay tayo!`,
       ]),
       mood: 'thinking',
@@ -88,7 +88,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
   // 3) Goal done today — celebrate.
   if (goalMet) {
     return {
-      text: pick(['Tapos na goal mo ngayon — idol!', 'Goal complete! Sobrang proud ako sa’yo.']),
+      text: pick(['Tapos na goal mo ngayon, idol!', 'Goal complete! Sobrang proud ako sa’yo.']),
       mood: 'excited',
     };
   }
@@ -106,7 +106,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
     return {
       text: pick([
         `${ctx.streak}-day streak! Wag nating putulin ha.`,
-        `${ctx.streak} araw na — laban pa para sa streak!`,
+        `${ctx.streak} araw na, laban pa para sa streak!`,
       ]),
       mood: 'happy',
       route: '/quiz',
@@ -117,7 +117,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
   if (ctx.goal > 0 && ctx.cardsToday > 0) {
     const pct = Math.round((ctx.cardsToday / ctx.goal) * 100);
     return {
-      text: pick([`${pct}% na sa goal — konti na lang!`, `Malapit na! ${pct}% ng goal mo.`]),
+      text: pick([`${pct}% na sa goal, konti na lang!`, `Malapit na! ${pct}% ng goal mo.`]),
       mood: 'happy',
       route: '/quiz',
     };
@@ -127,7 +127,7 @@ export function peekAdvice(ctx: PeekContext): PeekAdvice {
   return {
     text: pick([
       'Tara, simulan natin ang study?',
-      'Pindutin mo ako — quiz tayo, dali lang!',
+      'Pindutin mo ako, quiz tayo, dali lang!',
       'Andito lang ako. Aral tayo?',
     ]),
     mood: 'happy',

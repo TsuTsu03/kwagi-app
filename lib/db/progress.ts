@@ -1,4 +1,6 @@
+import type * as SQLite from 'expo-sqlite';
 import { getDb } from './client';
+import { calculateStreak, localDateKey } from '@/lib/date';
 
 export interface DailyStat {
   date: string; // YYYY-MM-DD
@@ -18,23 +20,17 @@ export interface ProgressTotals {
   accuracy: number; // 0..100
 }
 
-function todayKey(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
 /** Increment today's stats. Used by quiz + flashcard sessions. */
-export async function recordStudy(input: {
+export interface StudyRecordInput {
   cardsStudied?: number;
   questionsAnswered?: number;
   correctAnswers?: number;
   studySeconds?: number;
   xp?: number;
-}): Promise<void> {
-  const db = await getDb();
-  const date = todayKey();
+}
+
+export async function recordStudyOnDb(db: SQLite.SQLiteDatabase, input: StudyRecordInput): Promise<void> {
+  const date = localDateKey();
   await db.runAsync(
     `INSERT INTO daily_stats (date, cards_studied, questions_answered, correct_answers, study_time_seconds, xp_earned)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -55,9 +51,14 @@ export async function recordStudy(input: {
   );
 }
 
+export async function recordStudy(input: StudyRecordInput): Promise<void> {
+  const db = await getDb();
+  await recordStudyOnDb(db, input);
+}
+
 export async function getToday(): Promise<DailyStat> {
   const db = await getDb();
-  const date = todayKey();
+  const date = localDateKey();
   const row = await db.getFirstAsync<DailyStat>('SELECT * FROM daily_stats WHERE date = ?', [date]);
   return (
     row ?? {
@@ -100,6 +101,38 @@ export async function getTotals(): Promise<ProgressTotals> {
   };
 }
 
+/**
+ * Last `n` days of stats ending today, oldest first. Days with no row come
+ * back zero-filled so charts always have a full window.
+ */
+export async function getRecentDays(n = 7): Promise<DailyStat[]> {
+  const db = await getDb();
+  const keys: string[] = [];
+  const cursor = new Date();
+  cursor.setDate(cursor.getDate() - (n - 1));
+  for (let i = 0; i < n; i++) {
+    keys.push(localDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const placeholders = keys.map(() => '?').join(', ');
+  const rows = await db.getAllAsync<DailyStat>(
+    `SELECT * FROM daily_stats WHERE date IN (${placeholders})`,
+    keys,
+  );
+  const byDate = new Map(rows.map((r) => [r.date, r]));
+  return keys.map(
+    (date) =>
+      byDate.get(date) ?? {
+        date,
+        cards_studied: 0,
+        questions_answered: 0,
+        correct_answers: 0,
+        study_time_seconds: 0,
+        xp_earned: 0,
+      },
+  );
+}
+
 /** All dates (YYYY-MM-DD) with any study activity, for streak + heatmap. */
 export async function getActiveDates(): Promise<Set<string>> {
   const db = await getDb();
@@ -112,20 +145,5 @@ export async function getActiveDates(): Promise<Set<string>> {
 /** Current consecutive-day streak ending today (or yesterday). */
 export async function getStreak(): Promise<number> {
   const active = await getActiveDates();
-  if (active.size === 0) return 0;
-
-  let streak = 0;
-  const cursor = new Date();
-
-  // Allow the streak to still count if today hasn't been logged yet.
-  if (!active.has(todayKey(cursor))) {
-    cursor.setDate(cursor.getDate() - 1);
-    if (!active.has(todayKey(cursor))) return 0;
-  }
-
-  while (active.has(todayKey(cursor))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
+  return calculateStreak(active);
 }

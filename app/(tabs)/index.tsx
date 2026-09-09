@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View, Pressable } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, View, Pressable } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -10,336 +10,241 @@ import { FadeIn } from '@/components/ui/FadeIn';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PressableScale } from '@/components/ui/PressableScale';
-import { CountUp } from '@/components/ui/CountUp';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { IconBadge, type IconName } from '@/components/ui/IconBadge';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAppStore } from '@/lib/store';
-import { BOARD_LIST, BOARDS, type BoardId } from '@/constants/boards';
 import { getLevel } from '@/constants/levels';
 import { formatDate } from '@/lib/date';
 import { getStreak, getToday, getTotals } from '@/lib/db/progress';
-import { countDue } from '@/lib/db/flashcards';
+import { countDue, listFlashcards } from '@/lib/db/flashcards';
+import { listSubjects } from '@/lib/db/notes';
 import { getCoachAdvice, type CoachAdvice } from '@/lib/coach';
 import { useKwagiMood } from '@/hooks/useKwagiMood';
 import { useThemeColors } from '@/hooks/useTheme';
 import { useTablet } from '@/hooks/useTablet';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
   return 'Good evening';
 }
 
+type Dashboard = {
+  streak: number;
+  xpToday: number;
+  totalXp: number;
+  itemsToday: number;
+  studySeconds: number;
+  due: number;
+  hasCards: boolean;
+  noteCount: number;
+};
+
 export default function HomeScreen() {
-  const { settings, setActiveBoard } = useAppStore();
+  const { settings } = useAppStore();
   const c = useThemeColors();
-  const { isTablet } = useTablet();
-  const [streak, setStreak] = useState(0);
-  const [xpToday, setXpToday] = useState(0);
-  const [totalXp, setTotalXp] = useState(0);
-  const [cardsToday, setCardsToday] = useState(0);
-  const [studySeconds, setStudySeconds] = useState(0);
-  const [due, setDue] = useState(0);
+  const { isLargeTablet, width } = useTablet();
+  const animate = useAnimationsEnabled();
+  const [data, setData] = useState<Dashboard | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const request = useRef(0);
 
   const load = useCallback(async () => {
-    const [s, today, totals, dueCount] = await Promise.all([
-      getStreak(),
-      getToday(),
-      getTotals(),
-      countDue(),
-    ]);
-    setStreak(s);
-    setXpToday(today.xp_earned);
-    setCardsToday(today.cards_studied + today.questions_answered);
-    setStudySeconds(today.study_time_seconds);
-    setTotalXp(totals.totalXp);
-    setDue(dueCount);
+    const current = ++request.current;
+    setLoadError(false);
+    try {
+      const [streak, today, totals, due, cards, subjects] = await Promise.all([
+        getStreak(), getToday(), getTotals(), countDue(),
+        listFlashcards({ limit: 1, includeSuspended: true }), listSubjects(),
+      ]);
+      if (current !== request.current) return;
+      setData({
+        streak, xpToday: today.xp_earned, totalXp: totals.totalXp,
+        itemsToday: today.cards_studied + today.questions_answered,
+        studySeconds: today.study_time_seconds, due, hasCards: cards.length > 0,
+        noteCount: subjects.reduce((sum, subject) => sum + subject.note_count, 0),
+      });
+    } catch {
+      if (current === request.current) setLoadError(true);
+    }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      let alive = true;
-      void (async () => {
-        if (alive) await load();
-      })();
-      return () => {
-        alive = false;
-      };
-    }, [load]),
-  );
+  useFocusEffect(useCallback(() => {
+    void load();
+    return () => { request.current += 1; };
+  }, [load]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await load();
-    setRefreshing(false);
+    try { await load(); }
+    finally { setRefreshing(false); }
   }, [load]);
 
-  const advice = getCoachAdvice({
-    studySecondsToday: studySeconds,
-    lastStudyAt: settings.lastStudyAt,
-    streak,
-  });
-  const level = getLevel(totalXp);
   const goal = settings.dailyGoal;
-  const goalPct = goal > 0 ? Math.min(1, cardsToday / goal) : 0;
-  const activeBoard = settings.activeBoard;
-  const owlSize = isTablet ? 124 : 96;
+  const goalPct = data && goal > 0 ? Math.min(1, data.itemsToday / goal) : 0;
+  const advice = data ? getCoachAdvice({
+    studySecondsToday: data.studySeconds, lastStudyAt: settings.lastStudyAt, streak: data.streak,
+  }) : null;
+  const isNew = data && !data.hasCards && data.noteCount === 0;
+  const primaryLabel = data?.due ? `Review ${data.due} due ${data.due === 1 ? 'card' : 'cards'}`
+    : data?.hasCards ? 'Open your cards' : data?.noteCount ? 'Make cards from notes' : 'Create your first note';
+  const openStudy = () => {
+    if (data?.due) router.navigate({ pathname: '/quiz', params: { mode: 'review' } });
+    else if (data?.hasCards) router.navigate('/cards');
+    else router.navigate('/notes');
+  };
 
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: isLargeTablet ? 32 : 20, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={c.amber}
-            colors={[c.amber]}
-            progressBackgroundColor={c.surface}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.amber} colors={[c.amber]} progressBackgroundColor={c.surface} />}
       >
-        <Container>
-        {/* Header */}
-        <FadeIn index={0}>
-          <View className="mb-6 flex-row items-center justify-between">
-            <View className="flex-1 pr-3">
-              <Text className="text-sm text-sub">{greeting()}</Text>
-              <Text className="mt-0.5 text-3xl font-extrabold tracking-tighter text-ink">Kwagi</Text>
-              <Text className="mt-0.5 text-sm text-muted">{formatDate()}</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-              onPress={() => router.push('/settings')}
-              className="h-11 w-11 items-center justify-center rounded-full border border-bordersoft bg-surface"
-            >
-              <Ionicons name="settings-outline" size={21} color={c.sub} />
-            </Pressable>
-          </View>
-        </FadeIn>
-
-        {/* Kwagi coach — the study friend */}
-        <FadeIn index={1}>
-          <CoachBlock advice={advice} owlSize={owlSize} animate={settings.kwagiAnimations} />
-        </FadeIn>
-
-        {/* Today */}
-        <FadeIn index={2}>
-          <SectionHeader title="Today" className="mt-7" />
-        </FadeIn>
-
-        {/* Stats — one quiet panel, three columns, no competing glows */}
-        <FadeIn index={3}>
-          <Card className="mb-4 flex-row items-center">
-            <StatColumn icon="flame" tint={c.coral} value={streak} label="Streak" />
-            <Divider />
-            <StatColumn icon="flash" tint={c.amber} value={xpToday} label="XP today" />
-            <Divider />
-            <StatColumn icon={level.level.icon} tint={c.purple} value={level.level.name} label="Level" />
-          </Card>
-        </FadeIn>
-
-        {/* Daily goal */}
-        <FadeIn index={4}>
-          <Card className="mb-4" glow={goalPct >= 1 ? c.green : undefined}>
-            <View className="mb-2.5 flex-row items-center justify-between">
-              <Text className="text-md font-bold tracking-tight text-ink">Daily goal</Text>
-              <Text className="text-sm font-semibold text-sub">
-                {cardsToday}/{goal} cards
-              </Text>
-            </View>
-            <ProgressBar progress={goalPct} color={goalPct >= 1 ? c.green : c.amber} />
-            <Text className="mt-2.5 text-sm text-sub leading-5">
-              {goalPct >= 1
-                ? "Today's goal complete. Great work!"
-                : goalPct >= 0.5
-                  ? `${Math.round(goalPct * 100)}% — almost there, keep going.`
-                  : `${Math.round(goalPct * 100)}% — one step at a time.`}
-            </Text>
-          </Card>
-        </FadeIn>
-
-        {/* Due for review — only emphasized when there's something to do */}
-        <FadeIn index={5}>
-          <PressableScale
-            onPress={() => due > 0 && router.navigate('/quiz')}
-            disabled={due === 0}
-            haptic={due > 0}
-            accessibilityRole="button"
-            accessibilityLabel={due > 0 ? 'Review due cards' : 'No cards due'}
-          >
-            <Card className="mb-4 flex-row items-center" glow={due > 0 ? c.amber : undefined}>
-              <IconBadge name="albums" color={due > 0 ? c.amber : c.muted} box={44} />
-              <View className="ml-3 flex-1">
-                <Text className="text-md font-bold tracking-tight text-ink">Due for review</Text>
-                <Text className="mt-0.5 text-sm text-sub leading-5">
-                  {due > 0 ? `${due} ${due === 1 ? 'card' : 'cards'} due today` : "Nothing due — you're all caught up!"}
-                </Text>
+        <Container wide>
+          <FadeIn>
+            <View className="mb-6 flex-row items-center justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-sm text-sub">{greeting()}{settings.studentName ? `, ${settings.studentName}` : ''}</Text>
+                <Text accessibilityRole="header" className="mt-1 text-2xl font-extrabold tracking-tighter text-ink">Your study desk</Text>
+                <Text className="mt-1 text-sm text-muted">{settings.course ? `${settings.course} · ` : ''}{formatDate()}</Text>
               </View>
-              {due > 0 && <Ionicons name="chevron-forward" size={20} color={c.amber} />}
+              <Pressable
+                accessibilityRole="button" accessibilityLabel="Settings" onPress={() => router.push('/settings')}
+                className="h-12 w-12 items-center justify-center rounded-2xl border border-bordersoft bg-surface"
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Ionicons name="settings-outline" size={22} color={c.sub} />
+              </Pressable>
+            </View>
+          </FadeIn>
+
+          {loadError && (
+            <Card className="mb-4">
+              <Text accessibilityRole="alert" className="text-base text-coral">Your study overview could not load.</Text>
+              <Text className="mt-1 text-sm text-sub">{data ? 'The figures below are from your last successful refresh.' : 'Try again to see your cards and progress.'}</Text>
+              <Button label="Try again" variant="secondary" onPress={() => void load()} className="mt-3" />
             </Card>
-          </PressableScale>
-        </FadeIn>
+          )}
+          {!data && !loadError && (
+            <View className="items-center gap-3 py-12" accessibilityLabel="Loading your study overview">
+              <ActivityIndicator color={c.amber} />
+              <Text className="text-base text-sub">Opening your study desk…</Text>
+            </View>
+          )}
+          {data && advice && (
+            <>
+              <FadeIn index={1}>
+                <Card className="mb-6" style={{ padding: isLargeTablet ? 28 : 20, borderColor: c.amberDim }}>
+                  <View className="flex-row items-center">
+                    <View className="flex-1">
+                      <Text className="text-sm font-semibold text-amber">{data.due > 0 ? 'READY TO REVIEW' : isNew ? 'START HERE' : 'YOUR NEXT STEP'}</Text>
+                      <Text accessibilityRole="header" className="mt-2 text-2xl font-extrabold tracking-tight text-ink">
+                        {data.due > 0 ? 'Ready when you are.' : isNew ? 'Make your first topic stick.' : data.hasCards ? 'Your review queue is clear.' : 'Turn notes into practice.'}
+                      </Text>
+                      <Text className="mt-3 text-base leading-6 text-sub">
+                        {data.due > 0 ? `${data.due} ${data.due === 1 ? 'card is' : 'cards are'} ready. Start with the ones due now.`
+                          : isNew ? 'Add a subject and a note, then turn the key ideas into flashcards.'
+                          : data.hasCards ? 'Manage your cards or add a new topic while you wait for your next review.'
+                          : 'Open a note and turn its key ideas into flashcards for your next review.'}
+                      </Text>
+                    </View>
+                    {width >= 390 && <View className="ml-3"><KwagiOwl mood={isNew ? 'happy' : advice.mood} size={isLargeTablet ? 136 : 84} animate={animate} /></View>}
+                  </View>
+                  <View className="mt-5" style={isLargeTablet ? { alignSelf: 'flex-start', minWidth: 280 } : undefined}>
+                    <Button label={primaryLabel} onPress={openStudy} icon={<Ionicons name={data.due ? 'play' : 'arrow-forward'} size={18} color={c.bg} />} />
+                  </View>
+                </Card>
+              </FadeIn>
 
-        {/* Quick actions */}
-        <FadeIn index={6}>
-          <SectionHeader title="Quick actions" className="mt-3" />
-          <View className="flex-row flex-wrap gap-3">
-            <QuickAction icon="school" label="Quiz" hint="Practice questions" tint={c.amber} onPress={() => router.navigate('/quiz')} />
-            <QuickAction icon="chatbubble-ellipses" label="Ask Kwagi" hint="AI study buddy" tint={c.purple} onPress={() => router.navigate('/chat')} />
-            <QuickAction icon="document-text" label="Notes" hint="Your reviewer" tint={c.teal} onPress={() => router.navigate('/notes')} />
-            <QuickAction icon="stats-chart" label="Progress" hint="Track your stats" tint={c.green} onPress={() => router.navigate('/progress')} />
-          </View>
-        </FadeIn>
-
-        {/* Board selector */}
-        <FadeIn index={7}>
-          <SectionHeader title="Exam track" subtitle={BOARDS[activeBoard].name} className="mt-7" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
-            {BOARD_LIST.map((b) => {
-              const active = b.id === activeBoard;
-              return (
-                <PressableScale
-                  key={b.id}
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    setActiveBoard(b.id as BoardId);
-                  }}
-                  haptic={false}
-                  accessibilityRole="button"
-                  accessibilityLabel={b.name}
-                  accessibilityState={{ selected: active }}
-                  className={`flex-row items-center rounded-pill border px-3.5 py-2.5 ${active ? 'border-amber bg-amberdim' : 'border-bordersoft bg-surface'}`}
-                >
-                  <Ionicons name={b.icon} size={16} color={active ? c.amber : c.sub} />
-                  <Text className={`ml-1.5 text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{b.id}</Text>
-                </PressableScale>
-              );
-            })}
-          </ScrollView>
-        </FadeIn>
+              <View style={{ flexDirection: isLargeTablet ? 'row' : 'column', gap: 24, alignItems: 'stretch' }}>
+                <View style={{ flex: isLargeTablet ? 1.15 : undefined, minWidth: 0 }}>
+                  <FadeIn index={2}>
+                    <SectionHeader title="Today’s progress" />
+                    <Card>
+                      <View className="flex-row flex-wrap items-center justify-between gap-2">
+                        <Text className="text-md font-bold text-ink">Daily goal</Text>
+                        <Text className="text-sm font-semibold text-sub">{data.itemsToday} / {goal} study items</Text>
+                      </View>
+                      <View className="mt-4"><ProgressBar progress={goalPct} color={goalPct >= 1 ? c.green : c.amber} /></View>
+                      <Text className="mt-3 text-sm leading-5 text-sub">
+                        {goalPct >= 1 ? 'Your daily goal is complete. Take a moment to recharge.' : `${Math.max(0, goal - data.itemsToday)} more to reach your goal. Card reviews and quiz answers both count.`}
+                      </Text>
+                      <View className="my-5 h-px bg-bordersoft" />
+                      <View className="flex-row gap-3">
+                        <Stat value={`${data.streak}`} label="day streak" icon="flame-outline" />
+                        <Stat value={`${data.xpToday}`} label="XP today" icon="flash-outline" />
+                        <Stat value={getLevel(data.totalXp).level.name} label="current level" icon="ribbon-outline" />
+                      </View>
+                    </Card>
+                    <View className="mt-4"><CoachBlock advice={advice} animate={animate} /></View>
+                  </FadeIn>
+                </View>
+                <View style={{ flex: isLargeTablet ? 1 : undefined, minWidth: 0 }}>
+                  <FadeIn index={3}>
+                    <SectionHeader title="Keep learning" />
+                    <View className="gap-3">
+                      <QuickAction icon="document-text-outline" label="Your notes" hint={data.noteCount ? `${data.noteCount} ${data.noteCount === 1 ? 'note' : 'notes'} across your subjects` : 'Build a reviewer, one topic at a time'} tint={c.teal} onPress={() => router.navigate('/notes')} />
+                      <QuickAction icon="albums-outline" label="Your flashcards" hint="Create, edit, and organize your cards" tint={c.purple} onPress={() => router.navigate('/cards')} />
+                      <QuickAction icon="school-outline" label="Practice questions" hint="Choose a subject and test your recall" tint={c.amber} onPress={() => router.navigate('/quiz')} />
+                      <QuickAction icon="stats-chart-outline" label="Your progress" hint="See your activity and study history" tint={c.green} onPress={() => router.navigate('/progress')} />
+                    </View>
+                  </FadeIn>
+                </View>
+              </View>
+            </>
+          )}
         </Container>
       </ScrollView>
     </Screen>
   );
 }
 
-function CoachBlock({ advice, owlSize, animate }: { advice: CoachAdvice; owlSize: number; animate: boolean }) {
+function CoachBlock({ advice, animate }: { advice: CoachAdvice; animate: boolean }) {
   const c = useThemeColors();
-  const accent = c[advice.accent];
   const { mood, setBase, flash } = useKwagiMood(advice.mood);
-
-  // Keep Kwagi's resting mood in sync with the coach's current advice.
-  useFocusEffect(
-    useCallback(() => {
-      setBase(advice.mood);
-    }, [advice.mood, setBase]),
-  );
-
-  const poke = useCallback(() => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    flash('excited', 1100);
-  }, [flash]);
-
+  useFocusEffect(useCallback(() => { setBase(advice.mood); }, [advice.mood, setBase]));
   return (
-    <Card glow={accent}>
-      <View className="flex-row items-start">
-        <PressableScale
-          onPress={poke}
-          haptic={false}
-          pressedScale={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="Poke Kwagi"
-        >
-          <KwagiOwl mood={mood} size={owlSize} animate={animate} />
-        </PressableScale>
-        <View className="ml-1 flex-1">
-          <Text className="text-md font-extrabold tracking-tight" style={{ color: accent }}>
-            {advice.title}
-          </Text>
-          <Text className="mt-1 text-sm text-sub leading-5">{advice.message}</Text>
-        </View>
+    <View className="flex-row items-start rounded-card border border-bordersoft p-4">
+      <PressableScale onPress={() => flash('excited', 1100)} pressedScale={animate ? 0.96 : 1} accessibilityRole="button" accessibilityLabel="Say hello to Kwagi">
+        <KwagiOwl mood={mood} size={60} animate={animate} />
+      </PressableScale>
+      <View className="ml-2 flex-1">
+        <Text className="text-sm font-semibold" style={{ color: c[advice.accent] }}>{advice.title}</Text>
+        <Text className="mt-1 text-sm leading-5 text-sub">{advice.message}</Text>
       </View>
-      {advice.cta && (
-        <View className="mt-3">
-          <Button
-            label={advice.cta.label}
-            onPress={() => router.navigate('/quiz')}
-            icon={<Ionicons name="play" size={17} color={c.bg} />}
-          />
-        </View>
-      )}
-    </Card>
-  );
-}
-
-function Divider() {
-  return <View className="h-10 w-px bg-bordersoft" />;
-}
-
-function StatColumn({
-  icon,
-  tint,
-  value,
-  label,
-}: {
-  icon: IconName;
-  tint: string;
-  value: number | string;
-  label: string;
-}) {
-  return (
-    <View className="flex-1 items-center px-1">
-      <IconBadge name={icon} color={tint} box={36} size={18} />
-      {typeof value === 'number' ? (
-        <CountUp
-          value={value}
-          className="mt-2 text-lg font-extrabold tracking-tight text-ink"
-          numberOfLines={1}
-        />
-      ) : (
-        <Text className="mt-2 text-lg font-extrabold tracking-tight text-ink" numberOfLines={1}>
-          {value}
-        </Text>
-      )}
-      <Text className="text-xs text-sub" numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  hint,
-  tint,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  hint: string;
-  tint: string;
-  onPress: () => void;
-}) {
+function Stat({ value, label, icon }: { value: string; label: string; icon: IconName }) {
+  const c = useThemeColors();
   return (
-    <PressableScale
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="min-h-[112px] flex-1 basis-[46%] justify-between rounded-card border border-bordersoft bg-surface p-4"
-    >
+    <View className="flex-1">
+      <Ionicons name={icon} size={19} color={c.amber} />
+      <Text className="mt-2 text-md font-bold text-ink">{value}</Text>
+      <Text className="mt-1 text-xs text-muted">{label}</Text>
+    </View>
+  );
+}
+
+function QuickAction({ icon, label, hint, tint, onPress }: { icon: IconName; label: string; hint: string; tint: string; onPress: () => void }) {
+  const c = useThemeColors();
+  const animate = useAnimationsEnabled();
+  return (
+    <PressableScale onPress={onPress} pressedScale={animate ? 0.96 : 1} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={hint}
+      className="min-h-[88px] flex-row items-center rounded-2xl border border-bordersoft bg-surface p-4">
       <IconBadge name={icon} color={tint} box={44} />
-      <View>
-        <Text className="text-md font-bold tracking-tight text-ink">{label}</Text>
-        <Text className="mt-0.5 text-xs text-muted">{hint}</Text>
+      <View className="mx-3 flex-1">
+        <Text className="text-base font-bold text-ink">{label}</Text>
+        <Text className="mt-1 text-sm leading-5 text-muted">{hint}</Text>
       </View>
+      <Ionicons name="chevron-forward" size={18} color={c.muted} />
     </PressableScale>
   );
 }

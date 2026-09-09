@@ -1,5 +1,6 @@
-import { getDb } from './client';
+import { getDb, withWriteTransaction } from './client';
 import { uid } from '@/lib/id';
+import { recordStudyOnDb, type StudyRecordInput } from './progress';
 
 export interface QuizAnswerInput {
   flashcardId?: string | null;
@@ -20,39 +21,25 @@ export interface QuizSessionInput {
   answers: QuizAnswerInput[];
 }
 
-/** Persist a finished quiz session plus its per-question answers. */
-export async function saveQuizSession(input: QuizSessionInput): Promise<string> {
+/** Atomically persist quiz details and matching daily progress. */
+export async function completeQuizSession(
+  input: QuizSessionInput,
+  progress: StudyRecordInput,
+): Promise<string> {
   const db = await getDb();
   const sessionId = uid('quiz_');
-  await db.withTransactionAsync(async () => {
-    await db.runAsync(
+  await withWriteTransaction(db, async (tx) => {
+    await tx.runAsync(
       'INSERT INTO quiz_sessions (id, board, subject, mode, total, correct, duration_seconds, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        sessionId,
-        input.board,
-        input.subject,
-        input.mode,
-        input.total,
-        input.correct,
-        input.durationSeconds,
-        Date.now(),
-      ],
+      [sessionId, input.board, input.subject, input.mode, input.total, input.correct, input.durationSeconds, Date.now()],
     );
-    for (const a of input.answers) {
-      await db.runAsync(
+    for (const answer of input.answers) {
+      await tx.runAsync(
         'INSERT INTO quiz_answers (id, session_id, flashcard_id, question, user_answer, correct_answer, is_correct, time_taken_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          uid('ans_'),
-          sessionId,
-          a.flashcardId ?? null,
-          a.question,
-          a.userAnswer,
-          a.correctAnswer,
-          a.isCorrect ? 1 : 0,
-          a.timeTakenMs,
-        ],
+        [uid('ans_'), sessionId, answer.flashcardId ?? null, answer.question, answer.userAnswer, answer.correctAnswer, answer.isCorrect ? 1 : 0, answer.timeTakenMs],
       );
     }
+    await recordStudyOnDb(tx, progress);
   });
   return sessionId;
 }

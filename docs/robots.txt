@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tsutsu03.github.io/kwagi-app/sitemap.xml

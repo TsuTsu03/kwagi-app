@@ -1,0 +1,8 @@
+# Kwagi
+
+Kwagi is an offline study app for notes, user-created flashcards, quizzes, spaced repetition, and local progress tracking.
+
+- [Privacy Policy](https://tsutsu03.github.io/kwagi-app/privacy/)
+- [Support](https://tsutsu03.github.io/kwagi-app/support/)
+
+The current release has no accounts, ads, analytics, cloud sync, payments, or AI service.

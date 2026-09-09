@@ -2,9 +2,11 @@
 
 # dependencies
 node_modules/
+.claude/
 
 # Expo
 .expo/
+.scratch/
 dist/
 web-build/
 expo-env.d.ts
@@ -17,6 +19,8 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+google-service-account*.json
+play-service-account*.json
 
 # Metro
 .metro-health-check*
@@ -25,6 +29,12 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.stackdump
+.expo-web*.log
+
+# generated QA captures (not store-ready native screenshots)
+/qa-screenshots/
+/marketing-screenshots/
 
 # macOS
 .DS_Store

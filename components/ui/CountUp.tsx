@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Text, type TextProps } from 'react-native';
-import { useAppStore } from '@/lib/store';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 interface Props extends TextProps {
   /** Target numeric value. */
@@ -22,18 +22,17 @@ const ease = (t: number) => 1 - Math.pow(1 - t, 3);
  * off) and always lands exactly on `value`.
  */
 export function CountUp({ value, duration = 800, format, className, ...rest }: Props) {
-  const animate = useAppStore((s) => s.settings.kwagiAnimations);
+  const animate = useAnimationsEnabled();
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
 
   useEffect(() => {
     if (!animate) {
       fromRef.current = value;
-      setDisplay(value);
-      return;
+      const sync = requestAnimationFrame(() => setDisplay(value));
+      return () => cancelAnimationFrame(sync);
     }
     const from = fromRef.current;
-    if (from === value) return;
     const start = Date.now();
     let raf = 0;
     const tick = () => {
@@ -49,9 +48,11 @@ export function CountUp({ value, duration = 800, format, className, ...rest }: P
     return () => cancelAnimationFrame(raf);
   }, [value, animate, duration]);
 
+  const visibleValue = animate ? display : value;
+
   return (
     <Text className={className} {...rest}>
-      {format ? format(display) : display}
+      {format ? format(visibleValue) : visibleValue}
     </Text>
   );
 }

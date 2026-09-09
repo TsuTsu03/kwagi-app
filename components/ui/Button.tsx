@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useThemeColors } from '@/hooks/useTheme';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 
@@ -18,12 +19,6 @@ interface Props extends Omit<PressableProps, 'children'> {
   fullWidth?: boolean;
   className?: string;
 }
-
-const VARIANT_BG: Record<Variant, string> = {
-  primary: 'bg-amber',
-  secondary: 'bg-card border border-bordersoft',
-  ghost: 'bg-transparent',
-};
 
 const VARIANT_TEXT: Record<Variant, string> = {
   primary: 'text-bg',
@@ -59,6 +54,7 @@ export function Button({
   ...rest
 }: Props) {
   const c = useThemeColors();
+  const animate = useAnimationsEnabled();
   const press = useSharedValue(0);
   const faceStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: press.value * LIFT }],
@@ -73,8 +69,9 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
-      onPressIn={() => (press.value = withTiming(1, { duration: 60 }))}
-      onPressOut={() => (press.value = withTiming(0, { duration: 110 }))}
+      accessibilityState={{ disabled: !!disabled }}
+      onPressIn={() => (press.value = withTiming(animate ? 1 : 0, { duration: animate ? 60 : 0 }))}
+      onPressOut={() => (press.value = withTiming(0, { duration: animate ? 110 : 0 }))}
       onPress={(e) => {
         if (haptic) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         onPress?.(e);
@@ -91,11 +88,21 @@ export function Button({
         }}
       >
         <Animated.View
-          style={[faceStyle]}
-          className={`min-h-[52px] flex-row items-center justify-center rounded-pill px-6 py-3 ${VARIANT_BG[variant]}`}
+          style={[faceStyle, {
+            minHeight: 52,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 999,
+            paddingHorizontal: 24,
+            paddingVertical: 12,
+            backgroundColor: variant === 'primary' ? c.amber : variant === 'secondary' ? c.card : 'transparent',
+            borderWidth: variant === 'secondary' ? 1 : 0,
+            borderColor: c.borderSoft,
+          }]}
         >
           {icon ? <View className="mr-2">{icon}</View> : null}
-          <Text className={`text-md font-bold tracking-tight ${VARIANT_TEXT[variant]}`}>{label}</Text>
+          <Text className={`shrink text-center text-md font-bold tracking-tight ${VARIANT_TEXT[variant]}`}>{label}</Text>
         </Animated.View>
       </View>
     </Pressable>

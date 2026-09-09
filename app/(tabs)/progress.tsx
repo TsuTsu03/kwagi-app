@@ -13,26 +13,35 @@ import { AnimatedRing } from '@/components/ui/AnimatedRing';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { IconBadge, type IconName } from '@/components/ui/IconBadge';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { useAppStore } from '@/lib/store';
-import { getTotals, getStreak, type ProgressTotals } from '@/lib/db/progress';
+import { PressableScale } from '@/components/ui/PressableScale';
+import { getTotals, getStreak, getRecentDays, type DailyStat, type ProgressTotals } from '@/lib/db/progress';
 import { countSessions } from '@/lib/db/quiz';
 import { getLevel, LEVELS } from '@/constants/levels';
 import { formatDuration } from '@/lib/date';
 import { useThemeColors } from '@/hooks/useTheme';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 export default function ProgressScreen() {
-  const { settings } = useAppStore();
   const c = useThemeColors();
+  const animate = useAnimationsEnabled();
   const [totals, setTotals] = useState<ProgressTotals | null>(null);
   const [streak, setStreak] = useState(0);
   const [sessions, setSessions] = useState(0);
+  const [week, setWeek] = useState<DailyStat[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
-    const [t, s, sess] = await Promise.all([getTotals(), getStreak(), countSessions()]);
-    setTotals(t);
-    setStreak(s);
-    setSessions(sess);
+    setLoadError(false);
+    try {
+      const [t, s, sess, w] = await Promise.all([getTotals(), getStreak(), countSessions(), getRecentDays(7)]);
+      setTotals(t);
+      setStreak(s);
+      setSessions(sess);
+      setWeek(w);
+    } catch {
+      setLoadError(true);
+    }
   }, []);
 
   useFocusEffect(
@@ -50,8 +59,8 @@ export default function ProgressScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await load();
-    setRefreshing(false);
+    try { await load(); }
+    finally { setRefreshing(false); }
   }, [load]);
 
   const xp = totals?.totalXp ?? 0;
@@ -77,11 +86,12 @@ export default function ProgressScreen() {
         <FadeIn index={0}>
           <Text className="mb-4 text-2xl font-extrabold tracking-tighter text-ink">Progress</Text>
         </FadeIn>
+        {loadError && <Card className="mb-4"><Text className="text-sm text-coral">Progress could not load. Your study data was not deleted.</Text><PressableScale onPress={() => void load()} accessibilityRole="button" className="mt-2 min-h-11 justify-center"><Text className="font-bold text-amber">Try again</Text></PressableScale></Card>}
 
         {/* Kwagi summary */}
         <FadeIn index={1}>
           <Card elevated className="mb-5 flex-row items-center" glow={c.amber}>
-            <KwagiOwl mood={streak >= 7 ? 'excited' : 'happy'} size={88} animate={settings.kwagiAnimations} />
+            <KwagiOwl mood={streak >= 7 ? 'excited' : 'happy'} size={88} animate={animate} />
             <View className="ml-3 flex-1">
               <View
                 className="flex-row items-center self-start rounded-pill px-2.5 py-1"
@@ -101,7 +111,7 @@ export default function ProgressScreen() {
               <Text className="mt-1 text-xs text-sub">
                 {level.nextLevel
                   ? `${level.xpForNext} XP to ${level.nextLevel.name}`
-                  : 'Max level reached — Board Passer!'}
+                  : 'Highest study level reached!'}
               </Text>
             </View>
           </Card>
@@ -120,7 +130,7 @@ export default function ProgressScreen() {
                 />
               </View>
               <Text className="mt-1 text-center text-xs text-muted">
-                {streak >= 7 ? 'On fire — keep it up!' : 'Study daily to grow it.'}
+                {streak >= 7 ? 'On fire, keep it up!' : 'Study daily to grow it.'}
               </Text>
             </Card>
             <Card className="flex-1 items-center justify-center">
@@ -145,8 +155,16 @@ export default function ProgressScreen() {
           </View>
         </FadeIn>
 
-        {/* Stats grid */}
+        {/* This week — XP per day at a glance */}
         <FadeIn index={3}>
+          <SectionHeader title="This week" />
+          <Card className="mb-5">
+            <WeekChart days={week} />
+          </Card>
+        </FadeIn>
+
+        {/* Stats grid */}
+        <FadeIn index={4}>
           <SectionHeader title="Statistics" />
           <View className="mb-5 flex-row flex-wrap gap-3">
             <Stat icon="albums" label="Cards Studied" value={totals?.totalCardsStudied ?? 0} tint={c.teal} />
@@ -159,7 +177,7 @@ export default function ProgressScreen() {
         </FadeIn>
 
         {/* Level path — a connected climb from Freshie to Board Passer */}
-        <FadeIn index={4}>
+        <FadeIn index={5}>
           <SectionHeader title="Level path" />
           <Card>
             <View className="relative">
@@ -218,6 +236,43 @@ export default function ProgressScreen() {
         </Container>
       </ScrollView>
     </Screen>
+  );
+}
+
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+function WeekChart({ days }: { days: DailyStat[] }) {
+  const c = useThemeColors();
+  const max = Math.max(1, ...days.map((d) => d.xp_earned));
+  const weekXp = days.reduce((sum, d) => sum + d.xp_earned, 0);
+  return (
+    <View>
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text className="text-sm text-sub">XP earned per day</Text>
+        <Text className="text-sm font-bold tracking-tight text-amber">{weekXp} XP</Text>
+      </View>
+      <View className="h-24 flex-row items-end justify-between gap-2">
+        {days.map((d, i) => {
+          const isToday = i === days.length - 1;
+          const active = d.xp_earned > 0;
+          const h = active ? Math.max(0.12, d.xp_earned / max) : 0.06;
+          return (
+            <View key={d.date} className="flex-1 items-center">
+              <View
+                className="w-full rounded-md"
+                style={{
+                  height: `${Math.round(h * 100)}%`,
+                  backgroundColor: active ? (isToday ? c.amber : `${c.amber}88`) : c.border,
+                }}
+              />
+              <Text className={`mt-1.5 text-xs ${isToday ? 'font-bold text-amber' : 'text-muted'}`}>
+                {DAY_LABELS[new Date(`${d.date}T12:00:00`).getDay()]}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 

@@ -7,7 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useAppStore } from '@/lib/store';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 import { useThemeColors } from '@/hooks/useTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -40,7 +40,7 @@ export function AnimatedRing({
   children,
 }: Props) {
   const c = useThemeColors();
-  const animate = useAppStore((s) => s.settings.kwagiAnimations);
+  const animate = useAnimationsEnabled();
   const fill = color ?? c.amber;
   const fillTo = colorTo ?? c.amberLight;
 
