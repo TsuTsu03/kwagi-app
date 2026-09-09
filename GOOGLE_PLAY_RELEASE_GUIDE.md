@@ -12,6 +12,7 @@ Prepared September 9, 2026 for `com.stackwise.kwagi`. This is the exact path fro
 - [x] Listing copy, release notes, privacy text, support content, Data safety answers, and declaration guidance are prepared.
 - [x] Automated Play policy scan found no active policy risk in the analyzed domains.
 - [x] Repository release gate passed before this store-preparation pass: lint, TypeScript, 28 tests, Expo Doctor 21/21, and Android/iOS/web exports.
+- [x] Release candidate is pushed on `codex/google-play-release-candidate`; PR #1 CI repeated the full gate successfully.
 - [x] Privacy and support pages are public. GitHub Pages deployment `34293982126` completed successfully and all three configured URLs returned HTTP 200.
 - [ ] Signed production AAB exists. EAS cannot build it until the owner signs in on this machine.
 - [ ] Native Android critical-path test and screenshots are complete.

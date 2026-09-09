@@ -65,7 +65,7 @@ Browser verification at `localhost:8081` used a synthetic local library:
 - Dark phone layout at 390x844 and light desktop layout at 1280x900; animation preference off; corrected button alignment and selected navigation state. No browser errors in the final inspected error log.
 - Local screenshots: `qa-screenshots/audit-home-mobile-dark.png` and `qa-screenshots/audit-home-desktop-light.png` (ignored, not store assets). Native sharing and downloaded-file contents were not verified through a physical device or OS file picker.
 
-The full app candidate remains local because the starting workspace already contained substantial uncommitted work and an unrelated IDE change. The policy/support slice was independently reviewed and pushed to `TsuTsu03/kwagi-app` main as commit `2368991`; GitHub Pages is live. No app-source merge, signed bundle, Console upload, or store submission has occurred. The local-only Claude settings removal is staged; its disk copy remains intact.
+The full app candidate is frozen on `codex/google-play-release-candidate` in PR #1; GitHub CI run `34294815009` passed. The unrelated local IDE and `AGENTS.md` edits were excluded, and the tracked local-only Claude settings were removed from the release branch while the disk copy remains intact. The policy/support slice is on `TsuTsu03/kwagi-app` main as commit `2368991`, and GitHub Pages is live. No app-source merge, signed bundle, Console upload, or store submission has occurred.
 
 See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for ordered follow-up slices and acceptance criteria.
 
