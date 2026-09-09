@@ -2,6 +2,7 @@
   "expo": {
     "name": "Kwagi",
     "slug": "kwagi",
+    "owner": "den.dev",
     "version": "1.0.0",
     "scheme": "kwagi",
     "orientation": "portrait",
@@ -19,7 +20,6 @@
     },
     "android": {
       "package": "com.stackwise.kwagi",
-      "versionCode": 1,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -56,6 +56,12 @@
         }
       ],
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8f4fe89b-5022-4572-b27b-5eab1d115805"
+      }
+    }
   }
 }
