@@ -6,6 +6,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 interface Props extends Omit<PressableProps, 'style'> {
   className?: string;
@@ -43,13 +44,15 @@ export function PressableScale({
   ...rest
 }: Props) {
   const [pressed, setPressed] = useState(false);
+  const animate = useAnimationsEnabled();
   return (
     <Pressable
       disabled={disabled}
+      accessibilityState={{ disabled: !!disabled }}
       className={className}
       style={[
         {
-          transform: [{ scale: pressed ? pressedScale : 1 }],
+          transform: [{ scale: pressed && animate ? pressedScale : 1 }],
           opacity: pressed ? pressedOpacity : 1,
         },
         style,

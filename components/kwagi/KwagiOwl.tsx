@@ -18,6 +18,7 @@ import Animated, {
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -27,6 +28,7 @@ import type { KwagiMood } from '@/constants/dialogues';
 
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 const AnimatedG = Animated.createAnimatedComponent(G);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
  * Kwagi — a chibi Philippine barn owl. Warm brown gradient body, a cream
@@ -123,17 +125,23 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
   const gripSide = peek;
   const waveSide = peek === 'left' ? 'right' : peek === 'right' ? 'left' : undefined;
   const tilt = peek === 'left' ? 7 : peek === 'right' ? -7 : 0;
-  const tiltTransform = `rotate(${tilt} 100 112)`;
   const blink = useSharedValue(0);
   const breathe = useSharedValue(1);
   const float = useSharedValue(0);
   const halo = useSharedValue(0.6);
+  // Life layer: wandering gaze, idle sway, waving wing, twinkling sparkles.
+  const gazeX = useSharedValue(0);
+  const gazeY = useSharedValue(0);
+  const sway = useSharedValue(0);
+  const wave = useSharedValue(0);
+  const twinkle = useSharedValue(1);
   // Spring-driven reaction layer (applying Remotion's spring/keyframe craft to
   // reanimated): a hop+pop on correct/excited, a shake on wrong.
   const reactScale = useSharedValue(1);
   const reactY = useSharedValue(0);
   const reactX = useSharedValue(0);
   const blinkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gazeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const leftOpen = cfg.eyes === 'open';
   const rightOpen = cfg.eyes === 'open' || cfg.eyes === 'winkL';
@@ -172,6 +180,85 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
     );
   }, [animate, breathe, float, halo]);
 
+  // Idle sway — a gentle head/body rock. Sleepy Kwagi nods deeper and slower,
+  // like he's fighting to stay awake.
+  useEffect(() => {
+    if (!animate) {
+      sway.value = 0;
+      return;
+    }
+    const amp = mood === 'sleepy' ? 3.5 : 1.4;
+    const dur = mood === 'sleepy' ? 2600 : 1900;
+    sway.value = withRepeat(
+      withSequence(
+        withTiming(-amp, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+        withTiming(amp, { duration: dur, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [animate, mood, sway]);
+
+  // Sparkles twinkle instead of sitting frozen.
+  useEffect(() => {
+    if (!animate || !cfg.sparkle) {
+      twinkle.value = 1;
+      return;
+    }
+    twinkle.value = withRepeat(
+      withSequence(
+        withTiming(0.25, { duration: 420, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 420, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, [animate, cfg.sparkle, twinkle]);
+
+  // Peek wave — the inward wing actually waves hello.
+  useEffect(() => {
+    if (!animate || !peek) {
+      wave.value = 0;
+      return;
+    }
+    wave.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 480, easing: Easing.inOut(Easing.ease) }),
+        withTiming(-0.4, { duration: 480, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    );
+  }, [animate, peek, wave]);
+
+  // Wandering gaze — every few seconds the open eyes glance somewhere, hold,
+  // then drift back to center.
+  useEffect(() => {
+    if (!animate || !anyOpen) {
+      gazeX.value = 0;
+      gazeY.value = 0;
+      return;
+    }
+    let active = true;
+    const scheduleGlance = () => {
+      const delay = 3600 + Math.random() * 3200;
+      gazeTimer.current = setTimeout(() => {
+        if (!active) return;
+        const gx = (Math.random() * 2 - 1) * 3;
+        const gy = Math.random() * 2 - 0.5;
+        const ease = { duration: 260, easing: Easing.out(Easing.cubic) };
+        gazeX.value = withSequence(withTiming(gx, ease), withDelay(750, withTiming(0, ease)));
+        gazeY.value = withSequence(withTiming(gy, ease), withDelay(750, withTiming(0, ease)));
+        scheduleGlance();
+      }, delay);
+    };
+    scheduleGlance();
+    return () => {
+      active = false;
+      if (gazeTimer.current) clearTimeout(gazeTimer.current);
+    };
+  }, [animate, anyOpen, gazeX, gazeY]);
+
   useEffect(() => {
     if (!animate || !anyOpen) {
       blink.value = 0;
@@ -182,7 +269,16 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
       const delay = 3000 + Math.random() * 2000;
       blinkTimer.current = setTimeout(() => {
         if (!active) return;
-        blink.value = withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 80 }));
+        // Owls double-blink now and then — sells the "alive" illusion.
+        blink.value =
+          Math.random() < 0.35
+            ? withSequence(
+                withTiming(1, { duration: 80 }),
+                withTiming(0, { duration: 80 }),
+                withDelay(110, withTiming(1, { duration: 70 })),
+                withTiming(0, { duration: 70 }),
+              )
+            : withSequence(withTiming(1, { duration: 80 }), withTiming(0, { duration: 80 }));
         scheduleBlink();
       }, delay);
     };
@@ -225,6 +321,31 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
     ],
   }));
   const haloProps = useAnimatedProps(() => ({ opacity: halo.value }));
+  // Peek tilt (static) + live sway ride the same rotation about the body center.
+  const bodyProps = useAnimatedProps(() => ({ rotation: tilt + sway.value }));
+  const twinkleProps = useAnimatedProps(() => ({ opacity: twinkle.value }));
+  // Gaze rides plain cx/cy attributes so it works on native and web alike.
+  const rNow = EYE.r * cfg.eyeScale;
+  const pupilPropsL = useAnimatedProps(() => ({ cx: EYE.lx + gazeX.value, cy: EYE.cy + gazeY.value }));
+  const pupilPropsR = useAnimatedProps(() => ({ cx: EYE.rx + gazeX.value, cy: EYE.cy + gazeY.value }));
+  const hiaPropsL = useAnimatedProps(() => ({
+    cx: EYE.lx - rNow * 0.32 + gazeX.value,
+    cy: EYE.cy - rNow * 0.36 + gazeY.value,
+  }));
+  const hiaPropsR = useAnimatedProps(() => ({
+    cx: EYE.rx - rNow * 0.32 + gazeX.value,
+    cy: EYE.cy - rNow * 0.36 + gazeY.value,
+  }));
+  const hibPropsL = useAnimatedProps(() => ({
+    cx: EYE.lx + rNow * 0.28 + gazeX.value,
+    cy: EYE.cy + rNow * 0.3 + gazeY.value,
+  }));
+  const hibPropsR = useAnimatedProps(() => ({
+    cx: EYE.rx + rNow * 0.28 + gazeX.value,
+    cy: EYE.cy + rNow * 0.3 + gazeY.value,
+  }));
+  const wavePropsL = useAnimatedProps(() => ({ rotation: 42 + wave.value * 16 }));
+  const wavePropsR = useAnimatedProps(() => ({ rotation: -42 - wave.value * 16 }));
 
   const r = EYE.r * cfg.eyeScale;
   const lid = r + 2;
@@ -232,12 +353,18 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
 
   const haloColor = HALO[mood];
 
-  const renderOpenEye = (x: number) => (
+  // Pupil + highlights ride the gaze offset inside the static amber iris ring.
+  const renderOpenEye = (
+    x: number,
+    pupilProps: typeof pupilPropsL,
+    hiaProps: typeof hiaPropsL,
+    hibProps: typeof hibPropsL,
+  ) => (
     <G key={`eye-${x}`}>
       <Circle cx={x} cy={EYE.cy} r={r + 1.5} fill={C.iris} opacity={0.9} />
-      <Circle cx={x} cy={EYE.cy} r={r} fill={C.eye} />
-      <Circle cx={x - r * 0.32} cy={EYE.cy - r * 0.36} r={r * 0.26} fill={C.white} />
-      <Circle cx={x + r * 0.28} cy={EYE.cy + r * 0.3} r={r * 0.12} fill={C.white} opacity={0.8} />
+      <AnimatedCircle animatedProps={pupilProps} r={r} fill={C.eye} />
+      <AnimatedCircle animatedProps={hiaProps} r={r * 0.26} fill={C.white} />
+      <AnimatedCircle animatedProps={hibProps} r={r * 0.12} fill={C.white} opacity={0.8} />
       <AnimatedRect x={x - lid} y={EYE.cy - lid} width={2 * lid} fill={C.faceCream} animatedProps={lidProps} />
     </G>
   );
@@ -261,7 +388,10 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
           <Circle cx={100} cy={96} r={98} fill="url(#owlHalo)" />
         </AnimatedG>
 
-        <G transform={tiltTransform}>
+        {/* Pivot via nested translates — the `origin` prop breaks on web. */}
+        <G transform="translate(100, 112)">
+        <AnimatedG animatedProps={bodyProps}>
+        <G transform="translate(-100, -112)">
         <Ellipse cx={100} cy={188} rx={50} ry={8} fill={C.shadow} />
 
         {/* Head tufts */}
@@ -285,8 +415,10 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
             <Ellipse cx={38} cy={132} rx={15} ry={30} fill={C.wing} />
           </G>
         ) : waveSide === 'left' ? (
-          <G transform="rotate(42 54 120)">
-            <Ellipse cx={42} cy={120} rx={15} ry={32} fill={C.wing} />
+          <G transform="translate(54, 120)">
+            <AnimatedG animatedProps={wavePropsL}>
+              <Ellipse cx={-12} cy={0} rx={15} ry={32} fill={C.wing} />
+            </AnimatedG>
           </G>
         ) : (
           <Ellipse cx={48} cy={128} rx={18} ry={44} fill={C.wing} />
@@ -296,8 +428,10 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
             <Ellipse cx={162} cy={132} rx={15} ry={30} fill={C.wing} />
           </G>
         ) : waveSide === 'right' ? (
-          <G transform="rotate(-42 146 120)">
-            <Ellipse cx={158} cy={120} rx={15} ry={32} fill={C.wing} />
+          <G transform="translate(146, 120)">
+            <AnimatedG animatedProps={wavePropsR}>
+              <Ellipse cx={12} cy={0} rx={15} ry={32} fill={C.wing} />
+            </AnimatedG>
           </G>
         ) : (
           <Ellipse cx={152} cy={128} rx={18} ry={44} fill={C.wing} />
@@ -325,14 +459,14 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
 
         {/* Sparkles */}
         {cfg.sparkle && (
-          <G stroke={cfg.sparkle} strokeWidth={3} strokeLinecap="round">
+          <AnimatedG animatedProps={twinkleProps} stroke={cfg.sparkle} strokeWidth={3} strokeLinecap="round">
             <Line x1={42} y1={54} x2={50} y2={62} />
             <Line x1={158} y1={54} x2={150} y2={62} />
             <Line x1={150} y1={48} x2={158} y2={48} />
             <Line x1={42} y1={48} x2={50} y2={48} />
             <Line x1={66} y1={34} x2={66} y2={24} />
             <Line x1={134} y1={34} x2={134} y2={24} />
-          </G>
+          </AnimatedG>
         )}
 
         {/* Eyes */}
@@ -357,8 +491,8 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
             fill="none"
           />
         )}
-        {leftOpen && renderOpenEye(EYE.lx)}
-        {rightOpen && renderOpenEye(EYE.rx)}
+        {leftOpen && renderOpenEye(EYE.lx, pupilPropsL, hiaPropsL, hibPropsL)}
+        {rightOpen && renderOpenEye(EYE.rx, pupilPropsR, hiaPropsR, hibPropsR)}
 
         {/* Sad brows */}
         {cfg.brow === 'sad' && (
@@ -414,6 +548,8 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
           </G>
         )}
         {cfg.mark === 'sleep' && <Ellipse cx={120} cy={112} rx={4} ry={5} fill={C.indigo} opacity={0.6} />}
+        </G>
+        </AnimatedG>
         </G>
       </Svg>
     </Animated.View>

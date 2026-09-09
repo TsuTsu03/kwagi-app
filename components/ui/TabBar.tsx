@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useThemeColors } from '@/hooks/useTheme';
 import { useTablet } from '@/hooks/useTablet';
+import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -34,11 +35,11 @@ interface TabBarProps {
   };
 }
 
-const TABS: Record<string, { label: string; icon: IconName; center?: boolean }> = {
+const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: 'Home', icon: 'home' },
   notes: { label: 'Notes', icon: 'document-text' },
-  quiz: { label: 'Quiz', icon: 'school', center: true },
-  chat: { label: 'Chat', icon: 'chatbubble-ellipses' },
+  quiz: { label: 'Study', icon: 'school' },
+  cards: { label: 'Cards', icon: 'albums' },
   progress: { label: 'Progress', icon: 'stats-chart' },
 };
 
@@ -46,7 +47,6 @@ export function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const { isTablet } = useTablet();
   const { height } = useWindowDimensions();
-  const c = useThemeColors();
 
   const press = (route: { key: string; name: string }, focused: boolean) => () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -68,13 +68,9 @@ export function TabBar({ state, navigation }: TabBarProps) {
           paddingTop: insets.top + 18,
           paddingBottom: insets.bottom + 18,
           zIndex: 50,
-          shadowColor: c.shadow,
-          shadowOpacity: 1,
-          shadowRadius: 18,
-          shadowOffset: { width: 6, height: 0 },
         }}
       >
-        <Text className="font-extrabold tracking-tighter text-xl text-amber">Kw</Text>
+        <Text className="font-extrabold tracking-tighter text-lg text-amber">Kwagi</Text>
         <View className="mt-6 flex-1 justify-center gap-2.5">
           {state.routes.map((route, index) => {
             const meta = TABS[route.name];
@@ -99,10 +95,6 @@ export function TabBar({ state, navigation }: TabBarProps) {
       style={{
         paddingBottom: Math.max(insets.bottom, 10),
         paddingTop: 10,
-        shadowColor: c.shadow,
-        shadowOpacity: 1,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: -6 },
       }}
     >
       <View className="w-full flex-row">
@@ -110,9 +102,6 @@ export function TabBar({ state, navigation }: TabBarProps) {
           const meta = TABS[route.name];
           if (!meta) return null;
           const focused = state.index === index;
-          if (meta.center) {
-            return <CenterItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
-          }
           return <TabItem key={route.key} meta={meta} focused={focused} onPress={press(route, focused)} />;
         })}
       </View>
@@ -133,10 +122,12 @@ function RailItem({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole="tab"
       accessibilityLabel={meta.label}
       accessibilityState={{ selected: focused }}
+      aria-selected={focused}
       className={`w-16 items-center rounded-2xl py-2.5 ${focused ? 'bg-amberdim' : ''}`}
+      style={({ pressed }) => ({ minHeight: 64, opacity: pressed ? 0.65 : 1 })}
     >
       <Ionicons name={meta.icon} size={24} color={focused ? c.amber : c.muted} />
       <Text className="mt-1 text-xs tracking-tight" style={{ color: focused ? c.amber : c.muted }}>
@@ -156,10 +147,11 @@ function TabItem({
   onPress: () => void;
 }) {
   const c = useThemeColors();
+  const animate = useAnimationsEnabled();
   const p = useSharedValue(focused ? 1 : 0);
   useEffect(() => {
-    p.value = withTiming(focused ? 1 : 0, { duration: 220 });
-  }, [focused, p]);
+    p.value = animate ? withTiming(focused ? 1 : 0, { duration: 180 }) : focused ? 1 : 0;
+  }, [focused, p, animate]);
 
   // Soft glowing pill slides in behind the active icon.
   const pillStyle = useAnimatedStyle(() => ({
@@ -173,67 +165,19 @@ function TabItem({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole="tab"
       accessibilityLabel={meta.label}
       accessibilityState={{ selected: focused }}
+      aria-selected={focused}
       className="flex-1 items-center justify-center"
+      style={({ pressed }) => ({ minHeight: 56, opacity: pressed ? 0.65 : 1 })}
     >
       <View className="h-9 items-center justify-center">
-        <Animated.View className="absolute h-9 w-14 rounded-pill bg-amberdim" style={pillStyle} />
+        <Animated.View style={[pillStyle, { position: 'absolute', height: 36, width: 56, borderRadius: 999, backgroundColor: c.amberDim }]} />
         <Animated.View style={iconStyle}>
           <Ionicons name={meta.icon} size={23} color={focused ? c.amber : c.muted} />
         </Animated.View>
       </View>
-      <Text className="mt-1 text-xs tracking-tight" style={{ color: focused ? c.amber : c.muted }}>
-        {meta.label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function CenterItem({
-  meta,
-  focused,
-  onPress,
-}: {
-  meta: { label: string; icon: IconName };
-  focused: boolean;
-  onPress: () => void;
-}) {
-  const c = useThemeColors();
-  const p = useSharedValue(focused ? 1 : 0);
-  useEffect(() => {
-    p.value = withTiming(focused ? 1 : 0, { duration: 260 });
-  }, [focused, p]);
-
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + p.value * 0.06 }],
-  }));
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={meta.label}
-      accessibilityState={{ selected: focused }}
-      className="flex-1 items-center"
-    >
-      <Animated.View
-        className="-mt-8 h-16 w-16 items-center justify-center rounded-full border-4 border-bg"
-        style={[
-          style,
-          {
-            backgroundColor: c.amber,
-            shadowColor: c.amber,
-            shadowOpacity: focused ? 0.6 : 0.35,
-            shadowRadius: 16,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 10,
-          },
-        ]}
-      >
-        <Ionicons name={meta.icon} size={28} color={c.bg} />
-      </Animated.View>
       <Text className="mt-1 text-xs tracking-tight" style={{ color: focused ? c.amber : c.muted }}>
         {meta.label}
       </Text>

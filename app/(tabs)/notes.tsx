@@ -1,85 +1,102 @@
-import { useCallback, useState } from 'react';
+import { showAlert } from '@/lib/alert';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  Pressable,
+  KeyboardAvoidingView,
+  BackHandler,
+  Platform,
   ScrollView,
   Text,
   TextInput,
   View,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { KwagiOwl } from '@/components/kwagi/KwagiOwl';
-import { KwagiSpeech } from '@/components/kwagi/KwagiSpeech';
 import { Screen } from '@/components/ui/Screen';
 import { Container } from '@/components/ui/Container';
-import { FadeIn } from '@/components/ui/FadeIn';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { PressableScale } from '@/components/ui/PressableScale';
-import { IconBadge, safeIcon, type IconName } from '@/components/ui/IconBadge';
+import { IconBadge, safeIcon } from '@/components/ui/IconBadge';
 import {
-  listSubjects,
-  listNotes,
-  createSubject,
   createNote,
-  updateNote,
+  createSubject,
   deleteNote,
   deleteSubject,
-  type SubjectWithCount,
+  listNotes,
+  listSubjects,
+  saveNoteWithCards,
+  togglePin,
+  updateNote,
   type Note,
+  type SubjectWithCount,
 } from '@/lib/db/notes';
-import { useAppStore } from '@/lib/store';
-import { BOARDS } from '@/constants/boards';
+import { generateFlashcards } from '@/lib/flashcardGenerator';
 import { useThemeColors } from '@/hooks/useTheme';
-import { useTablet } from '@/hooks/useTablet';
 
 type NotesView = 'subjects' | 'notes' | 'editor';
+const SUBJECT_COLORS = ['#2DD4BF', '#F5A623', '#A78BFA', '#60A5FA', '#F472B6', '#34D399'];
 
 export default function NotesScreen() {
-  const { settings } = useAppStore();
   const c = useThemeColors();
-  const { isTablet } = useTablet();
   const [view, setView] = useState<NotesView>('subjects');
   const [subjects, setSubjects] = useState<SubjectWithCount[]>([]);
   const [activeSubject, setActiveSubject] = useState<SubjectWithCount | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [editing, setEditing] = useState<Note | null>(null);
-  const [newSubjectName, setNewSubjectName] = useState('');
-  const [composingSubject, setComposingSubject] = useState(false);
+  const [subjectName, setSubjectName] = useState('');
+  const [addingSubject, setAddingSubject] = useState(false);
+  const [query, setQuery] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [subjectBusy, setSubjectBusy] = useState(false);
 
   const refreshSubjects = useCallback(async () => {
-    setSubjects(await listSubjects());
+    setLoading(true);
+    setLoadError(false);
+    try { setSubjects(await listSubjects()); }
+    catch { setLoadError(true); }
+    finally { setLoading(false); }
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshSubjects();
-    }, [refreshSubjects]),
-  );
+  useFocusEffect(useCallback(() => void refreshSubjects(), [refreshSubjects]));
 
   const openSubject = useCallback(async (subject: SubjectWithCount) => {
-    setActiveSubject(subject);
-    setNotes(await listNotes(subject.id));
-    setView('notes');
+    try {
+      setActiveSubject(subject);
+      setNotes(await listNotes(subject.id));
+      setQuery('');
+      setView('notes');
+    } catch {
+      showAlert('Could not open subject', 'Your notes are still on this device. Please try again.');
+    }
   }, []);
 
+  const filteredNotes = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return notes;
+    return notes.filter((note) =>
+      `${note.title} ${note.content} ${note.tags.join(' ')}`.toLowerCase().includes(needle),
+    );
+  }, [notes, query]);
+
   const addSubject = useCallback(async () => {
-    const name = newSubjectName.trim();
-    if (!name) return;
-    await createSubject({
-      name,
-      board: settings.activeBoard,
-      color: BOARDS[settings.activeBoard].color,
-      icon: BOARDS[settings.activeBoard].icon,
-    });
-    setNewSubjectName('');
-    setComposingSubject(false);
-    await refreshSubjects();
-  }, [newSubjectName, settings.activeBoard, refreshSubjects]);
+    const name = subjectName.trim();
+    if (!name || subjectBusy) return;
+    setSubjectBusy(true);
+    const color = SUBJECT_COLORS[subjects.length % SUBJECT_COLORS.length];
+    try {
+      await createSubject({ name, color, icon: 'library' });
+      setSubjectName('');
+      setAddingSubject(false);
+      await refreshSubjects();
+    } catch {
+      showAlert('Could not add subject', 'Nothing was changed. Please try again.');
+    } finally {
+      setSubjectBusy(false);
+    }
+  }, [refreshSubjects, subjectBusy, subjectName, subjects.length]);
 
   const openEditor = useCallback((note: Note | null) => {
     setEditing(note);
@@ -88,223 +105,199 @@ export default function NotesScreen() {
     setView('editor');
   }, []);
 
-  const saveEditor = useCallback(async () => {
-    if (!activeSubject) return;
-    const t = title.trim() || 'Untitled';
-    if (editing) {
-      await updateNote(editing.id, { title: t, content });
-    } else {
-      await createNote({ subject_id: activeSubject.id, title: t, content });
-    }
-    setNotes(await listNotes(activeSubject.id));
-    await refreshSubjects();
-    setView('notes');
-  }, [activeSubject, editing, title, content, refreshSubjects]);
+  const hasDraft = title !== (editing?.title ?? '') || content !== (editing?.content ?? '');
+  const generatedPreview = useMemo(() => generateFlashcards(content), [content]);
+  const leaveEditor = useCallback(() => {
+    if (saving) return;
+    if (!hasDraft) { setView('notes'); return; }
+    showAlert('Discard unsaved changes?', 'Save your note first if you want to keep these changes.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => setView('notes') },
+    ]);
+  }, [hasDraft, saving]);
+  useFocusEffect(useCallback(() => {
+    const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (view === 'editor') { leaveEditor(); return true; }
+      if (view === 'notes') { setView('subjects'); return true; }
+      return false;
+    });
+    return () => listener.remove();
+  }, [leaveEditor, view]));
 
-  const removeNote = useCallback(
-    async (id: string) => {
-      if (!activeSubject) return;
-      await deleteNote(id);
+  const updateNotes = useCallback(async (action: () => Promise<void>) => {
+    if (!activeSubject) return;
+    try {
+      await action();
       setNotes(await listNotes(activeSubject.id));
       await refreshSubjects();
-    },
-    [activeSubject, refreshSubjects],
-  );
+    } catch {
+      showAlert('Could not update notes', 'Nothing was changed. Please try again.');
+    }
+  }, [activeSubject, refreshSubjects]);
 
-  // -------- Editor view --------
+  const updateSubjects = useCallback(async (action: () => Promise<void>) => {
+    try { await action(); await refreshSubjects(); }
+    catch { showAlert('Could not update subjects', 'Nothing was changed. Please try again.'); }
+  }, [refreshSubjects]);
+
+  const confirmDeleteSubject = useCallback((subject: SubjectWithCount) => {
+    showAlert('Delete subject?', `“${subject.name}”, its notes, and its cards will be permanently deleted.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void updateSubjects(() => deleteSubject(subject.id)) },
+    ]);
+  }, [updateSubjects]);
+
+  const persistEditor = useCallback(async (makeCards: boolean) => {
+    if (!activeSubject || saving) return;
+    setSaving(true);
+    try {
+      const cleanTitle = title.trim() || 'Untitled note';
+      if (makeCards) {
+        const generated = generateFlashcards(content);
+        if (!generated.length) {
+          showAlert('No cards found', 'Use “term :: definition”, “term: definition”, or Q:/A: lines in your note.');
+          return;
+        }
+        const result = await saveNoteWithCards({ noteId: editing?.id, subjectId: activeSubject.id, subjectName: activeSubject.name, title: cleanTitle, content, cards: generated });
+        showAlert(result.cardsCreated ? 'Cards created' : 'Cards already up to date', result.cardsCreated ? `${result.cardsCreated} cards added to ${activeSubject.name}.` : 'No duplicate cards were added.');
+      } else if (editing?.id) {
+        await updateNote(editing.id, { title: cleanTitle, content });
+      } else {
+        await createNote({ subject_id: activeSubject.id, title: cleanTitle, content });
+      }
+      setNotes(await listNotes(activeSubject.id));
+      await refreshSubjects();
+      setView('notes');
+    } catch {
+      showAlert('Could not save', 'Your note was not changed. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [activeSubject, content, editing, refreshSubjects, saving, title]);
+
   if (view === 'editor') {
     return (
       <Screen>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-          <View className="flex-row items-center justify-between border-b border-bordersoft p-4">
-            <Pressable onPress={() => setView('notes')} accessibilityRole="button" accessibilityLabel="Back" className="h-10 w-10 items-center justify-center">
-              <Ionicons name="chevron-back" size={26} color={c.sub} />
-            </Pressable>
-            <Text className="text-md font-bold tracking-tight text-ink">{editing ? 'Edit Note' : 'New Note'}</Text>
-            <Pressable onPress={saveEditor} accessibilityRole="button" accessibilityLabel="Save note" className="h-10 w-10 items-center justify-center">
-              <Ionicons name="checkmark" size={26} color={c.amber} />
-            </Pressable>
-          </View>
-          <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-            <Container>
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Note title..."
-                placeholderTextColor={c.muted}
-                className="text-2xl font-bold tracking-tight text-ink"
-              />
-              <View className="my-3 h-px bg-bordersoft" />
-              <TextInput
-                value={content}
-                onChangeText={setContent}
-                placeholder="Write your notes here... (#tags supported)"
-                placeholderTextColor={c.muted}
-                multiline
-                textAlignVertical="top"
-                className="min-h-[300px] text-md text-ink leading-6"
-              />
-            </Container>
-          </ScrollView>
+        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Container className="flex-1 p-4">
+            <View className="mb-3 flex-row items-center">
+              <PressableScale onPress={leaveEditor} disabled={saving} accessibilityRole="button" accessibilityLabel="Back to notes" className="h-11 w-11 items-center justify-center">
+                <Ionicons name="chevron-back" size={25} color={c.sub} />
+              </PressableScale>
+              <Text className="ml-1 flex-1 text-xl font-extrabold text-ink">{editing ? 'Edit note' : 'New note'}</Text>
+            </View>
+            <TextInput value={title} onChangeText={setTitle} editable={!saving} accessibilityLabel="Note title" placeholder="Note title" placeholderTextColor={c.muted} className="mb-3 rounded-card border border-bordersoft bg-surface px-4 py-3 text-lg font-bold text-ink" />
+            <TextInput
+              value={content}
+              onChangeText={setContent}
+              editable={!saving}
+              accessibilityLabel="Note content"
+              placeholder={'Write your notes...\n\nCard examples:\nTerm :: Definition\nQ: Question\nA: Answer'}
+              placeholderTextColor={c.muted}
+              multiline
+              textAlignVertical="top"
+              className="min-h-[120px] flex-1 rounded-card border border-bordersoft bg-surface p-4 text-md leading-6 text-ink"
+            />
+            <Text accessibilityLiveRegion="polite" className="mt-3 text-xs leading-5 text-sub">
+              {generatedPreview.length ? `${generatedPreview.length} card pairs detected. Save + cards adds new pairs without duplicates.` : 'To make cards, write one Term :: Definition pair per line.'}
+            </Text>
+            <View className="mt-3 flex-row gap-2">
+              <Button label={saving ? 'Saving...' : 'Save'} disabled={saving} onPress={() => void persistEditor(false)} className="flex-1" />
+              <Button label="Save + cards" disabled={saving || !generatedPreview.length} variant="secondary" onPress={() => void persistEditor(true)} className="flex-1" />
+            </View>
+          </Container>
         </KeyboardAvoidingView>
       </Screen>
     );
   }
 
-  // -------- Note list view --------
   if (view === 'notes' && activeSubject) {
     return (
       <Screen>
-        <View className="flex-row items-center justify-between border-b border-bordersoft p-4">
-          <Pressable onPress={() => setView('subjects')} accessibilityRole="button" accessibilityLabel="Back to subjects" className="h-10 w-10 items-center justify-center">
-            <Ionicons name="chevron-back" size={26} color={c.sub} />
-          </Pressable>
-          <Ionicons name={safeIcon(activeSubject.icon)} size={18} color={activeSubject.color ?? c.amber} />
-          <Text className="ml-2 flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
-            {activeSubject.name}
-          </Text>
-        </View>
-
-        {notes.length === 0 ? (
-          <View className="flex-1 items-center justify-center p-6">
-            <KwagiOwl mood="happy" size={120} animate={settings.kwagiAnimations} />
-            <View className="mt-3 w-full max-w-[280px]">
-              <KwagiSpeech text="Wala pang notes dito! Mag-create tayo ng una." tail="none" />
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <Container>
+            <View className="mb-4 flex-row items-center">
+              <PressableScale onPress={() => setView('subjects')} accessibilityRole="button" accessibilityLabel="Back to subjects" className="h-11 w-11 items-center justify-center">
+                <Ionicons name="chevron-back" size={25} color={c.sub} />
+              </PressableScale>
+              <View className="ml-1 flex-1">
+                <Text className="text-xl font-extrabold text-ink">{activeSubject.name}</Text>
+                <Text className="text-sm text-sub">{notes.length} {notes.length === 1 ? 'note' : 'notes'}</Text>
+              </View>
+              <PressableScale onPress={() => openEditor(null)} accessibilityRole="button" accessibilityLabel="New note" className="h-11 w-11 items-center justify-center rounded-full bg-amber">
+                <Ionicons name="add" size={24} color={c.bg} />
+              </PressableScale>
             </View>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-            <Container>
-            {notes.map((n, i) => (
-              <FadeIn key={n.id} index={i}>
-                <PressableScale
-                  onPress={() => openEditor(n)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open note ${n.title}`}
-                  className="mb-3 rounded-card border border-bordersoft bg-surface p-4"
-                >
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1 flex-row items-center">
-                      {!!n.pinned && (
-                        <Ionicons name="bookmark" size={14} color={c.amber} style={{ marginRight: 6 }} />
-                      )}
-                      <Text className="flex-1 text-md font-bold tracking-tight text-ink" numberOfLines={1}>
-                        {n.title}
-                      </Text>
+            <View className="mb-4 flex-row items-center rounded-card border border-bordersoft bg-surface px-3">
+              <Ionicons name="search" size={18} color={c.muted} />
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search notes" placeholderTextColor={c.muted} className="ml-2 min-h-11 flex-1 text-md text-ink" />
+            </View>
+            {filteredNotes.map((note) => (
+              <Card key={note.id} className="mb-3">
+                <View className="flex-row items-start">
+                  <PressableScale onPress={() => openEditor(note)} accessibilityRole="button" accessibilityLabel={`Open ${note.title}`} className="flex-1">
+                    <View>
+                      <Text className="text-md font-bold text-ink" numberOfLines={1}>{note.title}</Text>
+                      <Text className="mt-1 text-sm leading-5 text-sub" numberOfLines={3}>{note.content || 'Empty note'}</Text>
                     </View>
-                    <Pressable onPress={() => removeNote(n.id)} accessibilityRole="button" accessibilityLabel="Delete note" hitSlop={10} className="ml-2">
-                      <Ionicons name="trash-outline" size={18} color={c.muted} />
-                    </Pressable>
+                  </PressableScale>
+                  <View className="ml-2">
+                    <PressableScale onPress={() => void updateNotes(() => togglePin(note.id))} accessibilityRole="button" accessibilityLabel={note.pinned ? 'Unpin note' : 'Pin note'} className="ml-2 h-11 w-11 items-center justify-center">
+                      <Ionicons name={note.pinned ? 'bookmark' : 'bookmark-outline'} size={20} color={note.pinned ? c.amber : c.muted} />
+                    </PressableScale>
+                    <PressableScale onPress={() => showAlert('Delete note?', `“${note.title}” and its linked cards will be deleted.`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => void updateNotes(() => deleteNote(note.id)) },
+                    ])} accessibilityRole="button" accessibilityLabel="Delete note" className="ml-2 h-11 w-11 items-center justify-center">
+                      <Ionicons name="trash-outline" size={19} color={c.coral} />
+                    </PressableScale>
                   </View>
-                  {!!n.content && (
-                    <Text className="mt-1 text-sm text-sub leading-5" numberOfLines={2}>
-                      {n.content}
-                    </Text>
-                  )}
-                  {n.tags.length > 0 && (
-                    <View className="mt-2 flex-row flex-wrap gap-1.5">
-                      {n.tags.map((t) => (
-                        <Badge key={t} label={`#${t}`} color={c.purple} />
-                      ))}
-                    </View>
-                  )}
-                </PressableScale>
-              </FadeIn>
+                </View>
+              </Card>
             ))}
-            </Container>
-          </ScrollView>
-        )}
-
-        <PressableScale
-          onPress={() => openEditor(null)}
-          pressedScale={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="New note"
-          className="absolute bottom-6 right-6 h-14 w-14 items-center justify-center rounded-full bg-amber"
-          style={{
-            shadowColor: c.amber,
-            shadowOpacity: 0.5,
-            shadowRadius: 14,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 10,
-          }}
-        >
-          <Ionicons name="add" size={30} color={c.bg} />
-        </PressableScale>
+            {!filteredNotes.length && <Text className="py-12 text-center text-sm text-muted">{query ? 'No notes match your search.' : 'No notes yet. Add your first one.'}</Text>}
+          </Container>
+        </ScrollView>
       </Screen>
     );
   }
 
-  // -------- Subjects view --------
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         <Container>
-        <FadeIn index={0}>
-          <Text className="mb-1 text-2xl font-extrabold tracking-tighter text-ink">My Notes</Text>
-          <Text className="mb-5 text-sm text-sub">Organize your reviewer by subject.</Text>
-        </FadeIn>
-
-        <View className="flex-row flex-wrap gap-3">
-          {subjects.map((s, i) => (
-            <FadeIn key={s.id} index={i + 1} className={isTablet ? 'basis-[48%] grow' : 'w-full'}>
-              <PressableScale
-                onPress={() => openSubject(s)}
-                onLongPress={() => deleteSubject(s.id).then(refreshSubjects)}
-                accessibilityRole="button"
-                accessibilityLabel={`Open subject ${s.name}`}
-                className="h-full flex-row items-center rounded-card border border-bordersoft bg-surface p-4"
-              >
-                <IconBadge name={(s.icon as IconName) || 'book'} color={s.color ?? c.amber} box={44} />
+          <Text className="text-2xl font-extrabold text-ink">Subjects</Text>
+          <Text className="mb-5 mt-1 text-sm text-sub">Organize notes by class, course, or topic.</Text>
+          {loadError && <Card className="mb-4"><Text className="text-sm text-coral">Subjects could not load.</Text><Button label="Try again" variant="secondary" onPress={() => void refreshSubjects()} className="mt-3" /></Card>}
+          {subjects.map((subject) => (
+            <Card key={subject.id} className="mb-3 flex-row items-center">
+              <PressableScale onPress={() => void openSubject(subject)} accessibilityRole="button" accessibilityLabel={`Open ${subject.name}`} className="min-h-11 flex-1 flex-row items-center">
+                <IconBadge name={safeIcon(subject.icon)} color={subject.color ?? c.teal} box={44} />
                 <View className="ml-3 flex-1">
-                  <Text className="text-md font-bold tracking-tight text-ink" numberOfLines={1}>{s.name}</Text>
-                  <Text className="text-xs text-sub">{s.note_count} notes</Text>
+                  <Text className="text-md font-bold text-ink">{subject.name}</Text>
+                  <Text className="mt-0.5 text-sm text-sub">{subject.note_count} {subject.note_count === 1 ? 'note' : 'notes'}</Text>
                 </View>
-                {s.board && <Badge label={s.board} color={s.color ?? c.amber} />}
                 <Ionicons name="chevron-forward" size={20} color={c.muted} />
               </PressableScale>
-            </FadeIn>
+              <PressableScale onPress={() => confirmDeleteSubject(subject)} accessibilityRole="button" accessibilityLabel={`Delete ${subject.name}`} className="ml-2 h-11 w-11 items-center justify-center rounded-full">
+                <Ionicons name="trash-outline" size={19} color={c.coral} />
+              </PressableScale>
+            </Card>
           ))}
-        </View>
-
-        <View className="mt-3">
-        {composingSubject ? (
-          <View className="rounded-card border border-amber bg-surface p-4">
-            <TextInput
-              value={newSubjectName}
-              onChangeText={setNewSubjectName}
-              placeholder="Subject name..."
-              placeholderTextColor={c.muted}
-              autoFocus
-              className="text-md text-ink"
-              onSubmitEditing={addSubject}
-            />
-            <Text className="mt-1 text-xs text-muted">Board: {BOARDS[settings.activeBoard].name}</Text>
-            <View className="mt-3 flex-row gap-2">
-              <Button label="Add" onPress={addSubject} className="flex-1" />
-              <Button
-                label="Cancel"
-                variant="secondary"
-                onPress={() => {
-                  setComposingSubject(false);
-                  setNewSubjectName('');
-                }}
-                className="flex-1"
-              />
-            </View>
-          </View>
-        ) : (
-          <PressableScale
-            onPress={() => setComposingSubject(true)}
-            accessibilityRole="button"
-            accessibilityLabel="New subject"
-            className="flex-row items-center justify-center rounded-card border border-dashed border-border p-4"
-          >
-            <Ionicons name="add" size={20} color={c.amber} />
-            <Text className="ml-1 text-md font-semibold text-amber">New Subject</Text>
-          </PressableScale>
-        )}
-        </View>
+          {addingSubject ? (
+            <Card>
+              <TextInput value={subjectName} onChangeText={setSubjectName} placeholder="Subject name" placeholderTextColor={c.muted} autoFocus editable={!subjectBusy} onSubmitEditing={() => void addSubject()} className="min-h-11 text-md text-ink" />
+              <View className="mt-3 flex-row gap-2">
+                <Button label={subjectBusy ? 'Adding...' : 'Add subject'} disabled={subjectBusy} onPress={() => void addSubject()} className="flex-1" />
+                <Button label="Cancel" variant="secondary" onPress={() => { setAddingSubject(false); setSubjectName(''); }} className="flex-1" />
+              </View>
+            </Card>
+          ) : !loading && !loadError ? (
+            <PressableScale onPress={() => setAddingSubject(true)} accessibilityRole="button" accessibilityLabel="New subject" className="mt-1 flex-row items-center justify-center rounded-card border border-dashed border-border p-4">
+              <Ionicons name="add" size={20} color={c.amber} />
+              <Text className="ml-1 text-md font-semibold text-amber">New subject</Text>
+            </PressableScale>
+          ) : null}
         </Container>
       </ScrollView>
     </Screen>

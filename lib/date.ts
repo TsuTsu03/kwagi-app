@@ -65,3 +65,32 @@ export function formatDuration(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
+
+/** Local calendar key used for daily study records. */
+export function localDateKey(d = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Count consecutive local calendar dates ending today or yesterday. */
+export function calculateStreak(active: Set<string>, now = new Date()): number {
+  if (active.size === 0) return 0;
+
+  let streak = 0;
+  const cursor = new Date(now);
+  // Noon avoids missing or duplicated local hours at daylight-saving transitions.
+  cursor.setHours(12, 0, 0, 0);
+
+  if (!active.has(localDateKey(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!active.has(localDateKey(cursor))) return 0;
+  }
+
+  while (active.has(localDateKey(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}

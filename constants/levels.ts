@@ -14,10 +14,10 @@ export const LEVELS: Level[] = [
   { name: 'Freshie', minXp: 0, icon: 'leaf' },
   { name: 'Studybuddy', minXp: 100, icon: 'book' },
   { name: 'Reviewee', minXp: 300, icon: 'pencil' },
-  { name: 'Crammer', minXp: 700, icon: 'cafe' },
+  { name: 'Consistent', minXp: 700, icon: 'cafe' },
   { name: 'Marunong', minXp: 1500, icon: 'bulb' },
-  { name: 'Board Ready', minXp: 3000, icon: 'flame' },
-  { name: 'Board Passer', minXp: 6000, icon: 'trophy' },
+  { name: 'Dedicated', minXp: 3000, icon: 'flame' },
+  { name: 'Lifelong Learner', minXp: 6000, icon: 'trophy' },
 ];
 
 export interface LevelProgress {

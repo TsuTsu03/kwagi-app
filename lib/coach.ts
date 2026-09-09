@@ -58,8 +58,8 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
       title: 'Gabi na, kaibigan',
       message:
         studyMin > 0
-          ? 'Solid ang ginawa mo ngayon. Ang puyat kalaban ng memory — matulog ka na, mas tatatak bukas ang natutunan mo.'
-          : 'Pasado na ang oras ng deep focus. Kung gising ka pa, light review lang — wag mag-puyat, importante ang tulog.',
+          ? 'Solid ang ginawa mo ngayon. Ang puyat kalaban ng memory, kaya matulog ka na. Mas tatatak bukas ang natutunan mo.'
+          : 'Pasado na ang oras ng deep focus. Kung gising ka pa, light review na lang. Wag mag-puyat, importante ang tulog.',
       accent: 'indigo',
     };
   }
@@ -69,9 +69,9 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
     return {
       mode: 'overstudy',
       mood: 'thinking',
-      title: 'Pahinga muna — utos ni Kwagi',
+      title: 'Pahinga muna, utos ni Kwagi',
       message:
-        'Sobra na ng 90 minutes straight! Hindi tataas ang retention kung pagod na ang utak. Tigil muna — 10–15 min break, tubig, hangin. Babalik tayo mas matalino.',
+        'Sobra na ng 90 minutes straight! Hindi tataas ang retention kung pagod na ang utak. Tigil muna, 10–15 min break, tubig, hangin. Babalik tayo mas matalino.',
       accent: 'teal',
     };
   }
@@ -83,7 +83,7 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
       mood: 'happy',
       title: 'Magaling! Break time',
       message:
-        '45+ minutes na — ayos ka! Quick 5-minute break: tingala, mag-inom. Ang tamang pahinga, parte ng pag-aaral. Tapos balik tayo fresh.',
+        'You have studied for at least 45 minutes today. A short break can help you return feeling fresh.',
       accent: 'green',
     };
   }
@@ -107,7 +107,7 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
       mood: 'thinking',
       title: 'Matagal na ang break ah',
       message:
-        'Mahaba-haba na ang pahinga. Hindi ako pushover — tara, balikan natin, kahit 1 topic o 5 cards muna. Momentum is everything.',
+        'Mahaba-haba na ang pahinga. Hindi ako pushover, ha. Tara, balikan natin kahit 1 topic o 5 cards muna. Momentum is everything.',
       cta: { label: 'Balik tayo' },
       accent: 'coral',
     };
@@ -119,7 +119,7 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
       mode: 'resume',
       mood: 'happy',
       title: 'Sakto ang pahinga',
-      message: 'Nakapag-recharge ka na. Habang sariwa pa, tara ulit — kaunti lang muna, dahan-dahan.',
+      message: 'Nakapag-recharge ka na. Habang sariwa pa, tara ulit. Kaunti lang muna, dahan-dahan.',
       cta: { label: 'Ituloy ang review' },
       accent: 'amber',
     };
@@ -130,10 +130,10 @@ export function getCoachAdvice({ now = new Date(), studySecondsToday, lastStudyA
   return {
     mode: 'prime',
     mood: 'happy',
-    title: streak >= 3 ? `${streak}-day streak — wag putulin!` : 'Magandang oras mag-aral',
+    title: streak >= 3 ? `${streak}-day streak, wag putulin!` : 'Magandang oras mag-aral',
     message: evening
-      ? 'Perfect review window bago matulog. Light, focused session tayo — quality over quantity.'
-      : 'Gising pa ang utak ngayon — magandang oras mag-focus. Tara, simulan natin nang mahinahon.',
+      ? 'Perfect review window bago matulog. Light, focused session tayo, quality over quantity.'
+      : 'Gising pa ang utak ngayon, magandang oras mag-focus. Tara, simulan natin nang mahinahon.',
     cta: { label: 'Simulan ang study' },
     accent: 'amber',
   };

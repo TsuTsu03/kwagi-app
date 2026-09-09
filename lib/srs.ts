@@ -13,13 +13,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function updateSrs(
   card: SrsState,
   quality: 0 | 1 | 2 | 3 | 4 | 5,
+  now = Date.now(),
 ): SrsState & { nextReview: number } {
   if (quality < 3) {
     return {
       repetitions: 0,
       interval: 1,
       easeFactor: card.easeFactor,
-      nextReview: Date.now() + DAY_MS,
+      nextReview: now + DAY_MS,
     };
   }
 
@@ -37,16 +38,16 @@ export function updateSrs(
     interval,
     easeFactor: newEf,
     repetitions: card.repetitions + 1,
-    nextReview: Date.now() + interval * DAY_MS,
+    nextReview: now + interval * DAY_MS,
   };
 }
 
 /** Map a flashcard swipe gesture to an SM-2 quality score. */
 export type SwipeAction = 'again' | 'hard' | 'good' | 'easy';
 
-export const SWIPE_QUALITY: Record<SwipeAction, 0 | 2 | 4 | 5> = {
+export const SWIPE_QUALITY: Record<SwipeAction, 0 | 3 | 4 | 5> = {
   again: 0, // swipe left
-  hard: 2, // swipe up
+  hard: 3, // swipe up
   good: 4, // swipe right
   easy: 5, // tap star
 };

@@ -8,12 +8,24 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0A0E1A",
-    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "userInterfaceStyle": "automatic"
+      "bundleIdentifier": "com.stackwise.kwagi",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "userInterfaceStyle": "automatic",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.stackwise.kwagi",
+      "versionCode": 1,
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "userInterfaceStyle": "automatic",
       "adaptiveIcon": {
         "backgroundColor": "#0A0E1A",
@@ -30,7 +42,20 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0E1A",
+          "dark": {
+            "backgroundColor": "#0A0E1A"
+          }
+        }
+      ],
+      "expo-status-bar"
     ]
   }
 }

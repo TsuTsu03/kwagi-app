@@ -69,7 +69,7 @@ export const darkColors: ThemeColors = {
   text: '#EDF1FB',
   ink: '#EDF1FB',
   sub: '#9AA6C2',
-  muted: '#5C6889',
+  muted: '#939FBB',
 
   shadow: 'rgba(0,0,0,0.45)',
   stars: true,
@@ -84,9 +84,9 @@ export const lightColors: ThemeColors = {
   border: '#E6E5F2',
   borderSoft: 'rgba(30,33,64,0.07)',
 
-  amber: '#BA7517',
+  amber: '#965D13',
   amberLight: '#E09A2B',
-  amberDim: 'rgba(186,117,23,0.13)',
+  amberDim: 'rgba(150,93,19,0.13)',
   amberDeep: '#F3E6CF',
 
   teal: '#0F8E6F',
@@ -102,7 +102,7 @@ export const lightColors: ThemeColors = {
   text: '#1E2140',
   ink: '#1E2140',
   sub: '#5A6282',
-  muted: '#969CB8',
+  muted: '#656E8A',
 
   shadow: 'rgba(76,70,120,0.18)',
   stars: false,

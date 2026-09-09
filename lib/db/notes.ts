@@ -1,4 +1,4 @@
-import { getDb } from './client';
+import { getDb, withWriteTransaction } from './client';
 import { uid } from '@/lib/id';
 
 export interface Subject {
@@ -92,8 +92,11 @@ export async function createSubject(input: {
 
 export async function deleteSubject(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM notes WHERE subject_id = ?', [id]);
-  await db.runAsync('DELETE FROM subjects WHERE id = ?', [id]);
+  await withWriteTransaction(db, async (tx) => {
+    await tx.runAsync('DELETE FROM flashcards WHERE subject_id = ?', [id]);
+    await tx.runAsync('DELETE FROM notes WHERE subject_id = ?', [id]);
+    await tx.runAsync('DELETE FROM subjects WHERE id = ?', [id]);
+  });
 }
 
 // ---------------- Notes ----------------
@@ -157,9 +160,58 @@ export async function updateNote(
   );
 }
 
+export async function saveNoteWithCards(input: {
+  noteId?: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  content: string;
+  cards: { front: string; back: string }[];
+}): Promise<{ noteId: string; cardsCreated: number }> {
+  const db = await getDb();
+  const noteId = input.noteId ?? uid('note_');
+  const now = Date.now();
+  let cardsCreated = 0;
+
+  await withWriteTransaction(db, async (tx) => {
+    if (input.noteId) {
+      await tx.runAsync(
+        'UPDATE notes SET title = ?, content = ?, updated_at = ? WHERE id = ?',
+        [input.title, input.content, now, noteId],
+      );
+    } else {
+      await tx.runAsync(
+        'INSERT INTO notes (id, subject_id, title, content, tags, linked_note_ids, pinned, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+        [noteId, input.subjectId, input.title, input.content, JSON.stringify([]), JSON.stringify([]), now, now],
+      );
+    }
+
+    const existing = await tx.getAllAsync<{ front: string; back: string }>(
+      'SELECT front, back FROM flashcards WHERE note_id = ?',
+      [noteId],
+    );
+    const existingPairs = new Set(existing.map((card) => `${card.front.trim().toLowerCase()}\u0000${card.back.trim().toLowerCase()}`));
+    for (const card of input.cards) {
+      const key = `${card.front.trim().toLowerCase()}\u0000${card.back.trim().toLowerCase()}`;
+      if (existingPairs.has(key)) continue;
+      existingPairs.add(key);
+      await tx.runAsync(
+        'INSERT INTO flashcards (id, note_id, subject_id, front, back, board, subject, interval, ease_factor, repetitions, next_review, suspended, updated_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 2.5, 0, ?, 0, ?, ?)',
+        [uid('card_'), noteId, input.subjectId, card.front, card.back, input.subjectName, now, now, now],
+      );
+      cardsCreated += 1;
+    }
+  });
+
+  return { noteId, cardsCreated };
+}
+
 export async function deleteNote(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM notes WHERE id = ?', [id]);
+  await withWriteTransaction(db, async (tx) => {
+    await tx.runAsync('DELETE FROM flashcards WHERE note_id = ?', [id]);
+    await tx.runAsync('DELETE FROM notes WHERE id = ?', [id]);
+  });
 }
 
 export async function togglePin(id: string): Promise<void> {
