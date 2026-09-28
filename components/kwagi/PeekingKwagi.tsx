@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -32,21 +33,23 @@ interface SlotConfig {
 const SIZE = 78;
 /** How much of the owl stays hidden past the edge when peeking (0..1). */
 const HIDE = 0.44;
-/** Sit clear of the bottom tab bar. */
-const BOTTOM_OFFSET = 96;
+/** Height of the bottom tab bar above the system navigation inset. */
+const TAB_BAR_CLEARANCE = 68;
+/** Headroom inside the bottom clip box so the waving wing and wiggle stay visible. */
+const CLIP_PAD = 12;
 
 /**
  * Builds the four peek slots. Side slots ride at ~55% height; bottom slots
  * tuck into the corners above the tab bar. Vertical anchors are computed from
  * the live window height so it lands consistently across devices.
  */
-function buildSlots(height: number): Record<SlotId, SlotConfig> {
+function buildSlots(height: number, bottomOffset: number): Record<SlotId, SlotConfig> {
   const midY = Math.round(height * 0.52);
   return {
     right: { axis: 'x', anchor: { right: 0, top: midY }, bubble: 'left' },
     left: { axis: 'x', anchor: { left: 0, top: midY }, bubble: 'right' },
-    bottomRight: { axis: 'y', anchor: { right: 10, bottom: BOTTOM_OFFSET }, bubble: 'left' },
-    bottomLeft: { axis: 'y', anchor: { left: 10, bottom: BOTTOM_OFFSET }, bubble: 'right' },
+    bottomRight: { axis: 'y', anchor: { right: 10 - CLIP_PAD, bottom: bottomOffset }, bubble: 'left' },
+    bottomLeft: { axis: 'y', anchor: { left: 10 - CLIP_PAD, bottom: bottomOffset }, bubble: 'right' },
   };
 }
 
@@ -76,7 +79,11 @@ export function PeekingKwagi() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pokeTimes = useRef<number[]>([]);
 
-  const slots = buildSlots(height);
+  const insets = useSafeAreaInsets();
+  // The tab bar pads itself by the system nav inset (3-button nav is ~48dp),
+  // so the bottom slots must clear that too or Kwagi sits on the tab labels.
+  const bottomOffset = TAB_BAR_CLEARANCE + Math.max(insets.bottom, 10);
+  const slots = buildSlots(height, bottomOffset);
   const cfg = slots[slot];
   const hidden = SIZE; // fully past the edge
   const shown = SIZE * HIDE; // peeking
@@ -92,8 +99,8 @@ export function PeekingKwagi() {
       : slot === 'left'
         ? { left: INSET, top: midY - 10 }
         : slot === 'bottomRight'
-          ? { right: INSET, bottom: BOTTOM_OFFSET + Math.round(SIZE * 0.5) }
-          : { left: INSET, bottom: BOTTOM_OFFSET + Math.round(SIZE * 0.5) };
+          ? { right: INSET, bottom: bottomOffset + Math.round(SIZE * 0.5) }
+          : { left: INSET, bottom: bottomOffset + Math.round(SIZE * 0.5) };
 
   useEffect(() => {
     timers.current.forEach(clearTimeout);
@@ -211,6 +218,17 @@ export function PeekingKwagi() {
     setLine(quip.text);
   };
 
+  const owl = (
+    <PressableScale onPress={poke} haptic={false} pressedScale={0.85} accessibilityRole="button" accessibilityLabel="Kwagi">
+      <KwagiOwl
+        mood={mood}
+        size={SIZE}
+        animate={animate}
+        peek={slot === 'left' || slot === 'bottomLeft' ? 'left' : 'right'}
+      />
+    </PressableScale>
+  );
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Speech bubble — own on-screen layer, just fades; never slides off-edge */}
@@ -240,17 +258,19 @@ export function PeekingKwagi() {
         </Animated.View>
       ) : null}
 
-      {/* Owl — keeps the off-edge peek transform */}
-      <Animated.View style={[{ position: 'absolute', width: SIZE }, cfg.anchor, style]}>
-        <PressableScale onPress={poke} haptic={false} pressedScale={0.85} accessibilityRole="button" accessibilityLabel="Kwagi">
-          <KwagiOwl
-            mood={mood}
-            size={SIZE}
-            animate={animate}
-            peek={slot === 'left' || slot === 'bottomLeft' ? 'left' : 'right'}
-          />
-        </PressableScale>
-      </Animated.View>
+      {/* Owl — keeps the off-edge peek transform. Side slots hide past the
+          screen edge; bottom slots hide inside a clip box whose floor is the top
+          of the tab bar, so he sinks out of view instead of covering the tabs. */}
+      {cfg.axis === 'x' ? (
+        <Animated.View style={[{ position: 'absolute', width: SIZE }, cfg.anchor, style]}>{owl}</Animated.View>
+      ) : (
+        <View
+          pointerEvents="box-none"
+          style={[{ position: 'absolute', width: SIZE + CLIP_PAD * 2, height: SIZE + CLIP_PAD * 2, overflow: 'hidden' }, cfg.anchor]}
+        >
+          <Animated.View style={[{ position: 'absolute', bottom: 0, left: CLIP_PAD, width: SIZE }, style]}>{owl}</Animated.View>
+        </View>
+      )}
     </View>
   );
 }

@@ -10,17 +10,17 @@ import { useTablet } from '@/hooks/useTablet';
 interface Props {
   children: React.ReactNode;
   edges?: readonly Edge[];
-  /** Opt into the ambient backdrop when a screen calls for it. */
+  /** Hide the ambient night/day sky backdrop (e.g. for full-bleed modals). */
   ambient?: boolean;
   /** Reserve space for the tablet nav rail. Off for pushed routes (settings). */
   rail?: boolean;
 }
 
 /**
- * Standard opaque screen frame with an optional ambient backdrop.
+ * Standard screen frame with the ambient night/day sky backdrop behind it.
  * Tablet content is inset by the navigation rail width.
  */
-export function Screen({ children, edges = ['top'], ambient = false, rail = true }: Props) {
+export function Screen({ children, edges = ['top'], ambient = true, rail = true }: Props) {
   const animate = useAnimationsEnabled();
   const { isTablet } = useTablet();
   return (

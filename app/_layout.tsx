@@ -10,6 +10,7 @@ import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { useAppStore } from '@/lib/store';
 import { getDb } from '@/lib/db/client';
 import { useThemeColors, useIsDark } from '@/hooks/useTheme';
+import { PeekingKwagi } from '@/components/kwagi/PeekingKwagi';
 
 export default function RootLayout() {
   const hydrate = useAppStore((s) => s.hydrate);
@@ -63,6 +64,8 @@ export default function RootLayout() {
           <Stack.Screen name="backup" />
           <Stack.Screen name="legal" />
         </Stack>
+        {/* Omnipresent study buddy, mounted once above every screen. Hidden during onboarding so it never covers the form. */}
+        {onboardingComplete && segments[0] !== 'onboarding' && <PeekingKwagi />}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
