@@ -7,9 +7,7 @@ import Svg, {
   Line,
   LinearGradient,
   Path,
-  Polygon,
   Polyline,
-  RadialGradient,
   Rect,
   Stop,
 } from 'react-native-svg';
@@ -31,33 +29,38 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 /**
- * Kwagi — a chibi Philippine barn owl. Warm brown gradient body, a cream
- * heart-shaped face disc, small head tufts, speckled feathers, big amber
- * eyes. Matches the Stitch "Kwagi Expression Sheet" art (incl. the per-mood
- * marks ✓ ✗ ? zZ) while staying a live SVG so moods morph and he can blink,
- * breathe, float, and raise a wing to peek/wave.
+ * Kwagi — a chibi Philippine barn owl drawn to match the "Kwagi Expression
+ * Sheet": one bean-shaped caramel body with small ear points, a thick
+ * sticker-style outline, a big cream heart face mask, dark glossy eyes, a
+ * glowing halo ring, striped wings, a scalloped belly, and per-mood marks
+ * (check, cross, ?, zZ). It stays a live SVG so moods morph and he can blink,
+ * breathe, sway, float, think with a wing on his chin, and peek/wave from
+ * screen edges.
  */
 const C = {
-  bodyTop: '#B57F4C',
-  bodyBot: '#6E4A2A',
-  wing: '#5E3F22',
-  speck: '#5E3F22',
-  faceCream: '#F3E6CC',
-  faceRim: '#8A5A2E',
-  belly: '#ECDAB6',
-  chevron: '#CDA877',
-  beak: '#E8902A',
-  beakDark: '#C9761A',
-  feet: '#E8902A',
-  eye: '#2A1A0E',
-  iris: '#C8841E',
+  outline: '#5A3417',
+  bodyTop: '#D8A062',
+  bodyBot: '#B97A3F',
+  wing: '#A7672F',
+  wingStripe: '#7A4519',
+  faceCream: '#FAEBD3',
+  faceRim: '#B07A45',
+  belly: '#F5E2C3',
+  scallop: '#CF9D68',
+  beak: '#EE9A3A',
+  feet: '#EE9A3A',
+  eye: '#3A2211',
+  mouth: '#7C2F20',
+  tongue: '#F28B86',
   white: '#FFFFFF',
-  brow: '#4A3120',
-  amber: '#F5B454',
+  brow: '#5A3417',
+  amber: '#F5C24C',
   teal: '#34D9C4',
   wrong: '#F2776B',
-  indigo: '#6C8CFF',
-  shadow: 'rgba(0,0,0,0.20)',
+  indigo: '#7C8CFF',
+  question: '#E0B27A',
+  bubble: '#A9CBF5',
+  shadow: 'rgba(0,0,0,0.22)',
 };
 
 const HALO: Record<KwagiMood, string> = {
@@ -83,28 +86,43 @@ interface MoodConfig {
 
 const MOODS: Record<KwagiMood, MoodConfig> = {
   happy: { eyes: 'happyClosed', eyeScale: 1, brow: 'none', mouth: 'beak', sparkle: null, mark: 'none' },
-  excited: { eyes: 'open', eyeScale: 1.12, brow: 'none', mouth: 'smile', sparkle: C.amber, mark: 'none' },
+  excited: { eyes: 'open', eyeScale: 1.1, brow: 'none', mouth: 'smile', sparkle: C.amber, mark: 'none' },
   thinking: { eyes: 'winkL', eyeScale: 1, brow: 'none', mouth: 'neutral', sparkle: null, mark: 'question' },
-  correct: { eyes: 'open', eyeScale: 1.1, brow: 'none', mouth: 'smile', sparkle: C.teal, mark: 'check' },
-  wrong: { eyes: 'open', eyeScale: 0.88, brow: 'sad', mouth: 'frown', sparkle: null, mark: 'cross' },
+  correct: { eyes: 'open', eyeScale: 1.08, brow: 'none', mouth: 'smile', sparkle: C.teal, mark: 'check' },
+  wrong: { eyes: 'open', eyeScale: 0.9, brow: 'sad', mouth: 'frown', sparkle: null, mark: 'cross' },
   sleepy: { eyes: 'sleepyClosed', eyeScale: 1, brow: 'none', mouth: 'tiny', sparkle: null, mark: 'sleep' },
 };
 
-const EYE = { lx: 83, rx: 117, cy: 92, r: 13 };
+const EYE = { lx: 80, rx: 120, cy: 82, r: 13 };
 
+/** One bean-shaped head and body with two small ear points. */
+const BODY =
+  'M100 36 C 118 36 134 38 146 44 L 153 37 C 159 54 162 72 162 96 ' +
+  'C 162 132 154 164 132 176 C 120 182 80 182 68 176 ' +
+  'C 46 164 38 132 38 96 C 38 72 41 54 47 37 L 54 44 C 66 38 82 36 100 36 Z';
+
+/** Heart-shaped face mask: two lobes on top, a soft point under the beak. */
 const FACE_HEART =
-  'M100 136 C 78 118 60 106 60 86 C 60 70 76 62 88 72 C 92 75 96 78 100 84 ' +
-  'C 104 78 108 75 112 72 C 124 62 140 70 140 86 C 140 106 122 118 100 136 Z';
+  'M100 56 C 92 44 74 40 62 50 C 50 60 50 84 58 98 C 68 114 86 120 100 124 ' +
+  'C 114 120 132 114 142 98 C 150 84 150 60 138 50 C 126 40 108 44 100 56 Z';
 
-// Deterministic feather speckles on head + wings.
-const SPECKS: { x: number; y: number; rx: number; ry: number }[] = [
-  { x: 78, y: 60, rx: 2, ry: 3 },
-  { x: 122, y: 60, rx: 2, ry: 3 },
-  { x: 100, y: 50, rx: 2, ry: 2.6 },
-  { x: 66, y: 78, rx: 2, ry: 3 },
-  { x: 134, y: 78, rx: 2, ry: 3 },
-  { x: 100, y: 168, rx: 2, ry: 2.6 },
+const BELLY =
+  'M64 122 C 72 112 128 112 136 122 C 146 142 140 170 118 176 ' +
+  'C 108 179 92 179 82 176 C 60 170 54 142 64 122 Z';
+
+/** Left wing in local space: shoulder at (0,0), hanging down. Mirror it for the right. */
+const WING = 'M2 0 C -14 4 -24 28 -22 54 C -21 68 -12 76 -2 74 C 6 72 9 62 10 50 C 12 30 12 10 2 0 Z';
+
+// Small "u" feather scallops on the belly, in staggered rows.
+const SCALLOPS: [number, number][] = [
+  [86, 134], [100, 134], [114, 134],
+  [78, 148], [93, 148], [107, 148], [122, 148],
+  [86, 162], [100, 162], [114, 162],
 ];
+
+/** Four-point twinkle star. */
+const star = (x: number, y: number, r: number) =>
+  `M${x} ${y - r} Q${x} ${y} ${x + r} ${y} Q${x} ${y} ${x} ${y + r} Q${x} ${y} ${x - r} ${y} Q${x} ${y} ${x} ${y - r} Z`;
 
 interface Props {
   mood?: KwagiMood;
@@ -344,16 +362,30 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
     cx: EYE.rx + rNow * 0.28 + gazeX.value,
     cy: EYE.cy + rNow * 0.3 + gazeY.value,
   }));
-  const wavePropsL = useAnimatedProps(() => ({ rotation: 42 + wave.value * 16 }));
-  const wavePropsR = useAnimatedProps(() => ({ rotation: -42 - wave.value * 16 }));
+  // Raised high beside the head, like the waving pose on the expression sheet.
+  const wavePropsL = useAnimatedProps(() => ({ rotation: 145 + wave.value * 18 }));
+  const wavePropsR = useAnimatedProps(() => ({ rotation: -145 - wave.value * 18 }));
 
   const r = EYE.r * cfg.eyeScale;
   const lid = r + 2;
   const lidProps = useAnimatedProps(() => ({ height: 2 * lid * blink.value }));
 
   const haloColor = HALO[mood];
+  const chinWing = mood === 'thinking' && !peek;
 
-  // Pupil + highlights ride the gaze offset inside the static amber iris ring.
+  const wingShape = (
+    <>
+      <Path d={WING} fill={C.wing} stroke={C.outline} strokeWidth={3.5} strokeLinejoin="round" />
+      <G stroke={C.wingStripe} strokeWidth={2.5} strokeLinecap="round" fill="none">
+        <Path d="M-19 40 Q -6 45 8 40" />
+        <Path d="M-20 53 Q -7 58 7 53" />
+        <Path d="M-16 65 Q -7 69 3 65" />
+      </G>
+    </>
+  );
+  const mirrored = <G transform="scale(-1, 1)">{wingShape}</G>;
+
+  // Pupil + highlights ride the gaze offset; the lid rect drops for blinks.
   const renderOpenEye = (
     x: number,
     pupilProps: typeof pupilPropsL,
@@ -361,10 +393,9 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
     hibProps: typeof hibPropsL,
   ) => (
     <G key={`eye-${x}`}>
-      <Circle cx={x} cy={EYE.cy} r={r + 1.5} fill={C.iris} opacity={0.9} />
       <AnimatedCircle animatedProps={pupilProps} r={r} fill={C.eye} />
-      <AnimatedCircle animatedProps={hiaProps} r={r * 0.26} fill={C.white} />
-      <AnimatedCircle animatedProps={hibProps} r={r * 0.12} fill={C.white} opacity={0.8} />
+      <AnimatedCircle animatedProps={hiaProps} r={r * 0.34} fill={C.white} />
+      <AnimatedCircle animatedProps={hibProps} r={r * 0.14} fill={C.white} opacity={0.85} />
       <AnimatedRect x={x - lid} y={EYE.cy - lid} width={2 * lid} fill={C.faceCream} animatedProps={lidProps} />
     </G>
   );
@@ -373,120 +404,94 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
     <Animated.View style={[{ width: size, height: size }, containerStyle]}>
       <Svg width={size} height={size} viewBox="0 0 200 200">
         <Defs>
-          <RadialGradient id="owlHalo" cx="0.5" cy="0.5" r="0.5">
-            <Stop offset="0" stopColor={haloColor} stopOpacity="0.55" />
-            <Stop offset="0.6" stopColor={haloColor} stopOpacity="0.12" />
-            <Stop offset="1" stopColor={haloColor} stopOpacity="0" />
-          </RadialGradient>
           <LinearGradient id="owlBody" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={C.bodyTop} />
             <Stop offset="1" stopColor={C.bodyBot} />
           </LinearGradient>
         </Defs>
 
-        <AnimatedG animatedProps={haloProps}>
-          <Circle cx={100} cy={96} r={98} fill="url(#owlHalo)" />
-        </AnimatedG>
+        <Ellipse cx={100} cy={190} rx={46} ry={7} fill={C.shadow} />
 
         {/* Pivot via nested translates — the `origin` prop breaks on web. */}
         <G transform="translate(100, 112)">
         <AnimatedG animatedProps={bodyProps}>
         <G transform="translate(-100, -112)">
-        <Ellipse cx={100} cy={188} rx={50} ry={8} fill={C.shadow} />
 
-        {/* Head tufts */}
-        <Path d="M78 50 C 70 30 80 24 92 44 Z" fill={C.bodyTop} />
-        <Path d="M122 50 C 130 30 120 24 108 44 Z" fill={C.bodyTop} />
+        {/* Halo ring with a soft pulsing glow */}
+        <AnimatedG animatedProps={haloProps}>
+          <Ellipse cx={100} cy={18} rx={31} ry={7} fill="none" stroke={haloColor} strokeWidth={10} opacity={0.28} />
+        </AnimatedG>
+        <Ellipse cx={100} cy={18} rx={30} ry={6.5} fill="none" stroke={haloColor} strokeWidth={3.5} />
 
-        {/* Body + rounded head */}
-        <Ellipse cx={100} cy={122} rx={62} ry={64} fill="url(#owlBody)" />
-        <Circle cx={100} cy={84} r={54} fill="url(#owlBody)" />
+        {/* Feet: three rounded toes each, tucked under the body */}
+        <G fill={C.feet} stroke={C.outline} strokeWidth={2}>
+          {[80, 86, 92, 108, 114, 120].map((x) => (
+            <Ellipse key={x} cx={x} cy={x === 86 || x === 114 ? 185 : 183} rx={4.2} ry={4} />
+          ))}
+        </G>
 
-        {/* Feather speckles */}
-        <G fill={C.speck} opacity={0.25}>
-          {SPECKS.map((s, i) => (
-            <Ellipse key={i} cx={s.x} cy={s.y} rx={s.rx} ry={s.ry} />
+        {/* Body */}
+        <Path d={BODY} fill="url(#owlBody)" stroke={C.outline} strokeWidth={4} strokeLinejoin="round" />
+
+        {/* Scalloped cream belly */}
+        <Path d={BELLY} fill={C.belly} />
+        <G stroke={C.scallop} strokeWidth={2.2} strokeLinecap="round" fill="none">
+          {SCALLOPS.map(([x, y]) => (
+            <Path key={`${x}-${y}`} d={`M${x - 5} ${y} Q${x} ${y + 6} ${x + 5} ${y}`} />
           ))}
         </G>
 
         {/* Wings — for a peek: one grips the edge, the other waves into screen */}
         {gripSide === 'left' ? (
-          <G transform="rotate(26 56 118)">
-            <Ellipse cx={38} cy={132} rx={15} ry={30} fill={C.wing} />
-          </G>
+          <G transform="translate(49, 100) rotate(60)">{wingShape}</G>
         ) : waveSide === 'left' ? (
-          <G transform="translate(54, 120)">
-            <AnimatedG animatedProps={wavePropsL}>
-              <Ellipse cx={-12} cy={0} rx={15} ry={32} fill={C.wing} />
-            </AnimatedG>
+          <G transform="translate(49, 100)">
+            <AnimatedG animatedProps={wavePropsL}>{wingShape}</AnimatedG>
           </G>
         ) : (
-          <Ellipse cx={48} cy={128} rx={18} ry={44} fill={C.wing} />
+          <G transform="translate(49, 100)">{wingShape}</G>
         )}
         {gripSide === 'right' ? (
-          <G transform="rotate(-26 144 118)">
-            <Ellipse cx={162} cy={132} rx={15} ry={30} fill={C.wing} />
-          </G>
+          <G transform="translate(151, 100) rotate(-60)">{mirrored}</G>
         ) : waveSide === 'right' ? (
-          <G transform="translate(146, 120)">
-            <AnimatedG animatedProps={wavePropsR}>
-              <Ellipse cx={12} cy={0} rx={15} ry={32} fill={C.wing} />
-            </AnimatedG>
+          <G transform="translate(151, 100)">
+            <AnimatedG animatedProps={wavePropsR}>{mirrored}</AnimatedG>
           </G>
-        ) : (
-          <Ellipse cx={152} cy={128} rx={18} ry={44} fill={C.wing} />
+        ) : chinWing ? null : (
+          <G transform="translate(151, 100)">{mirrored}</G>
         )}
 
-        {/* Feet */}
-        <G stroke={C.feet} strokeWidth={4} strokeLinecap="round">
-          <Line x1={86} y1={180} x2={80} y2={188} />
-          <Line x1={86} y1={180} x2={86} y2={189} />
-          <Line x1={86} y1={180} x2={92} y2={188} />
-          <Line x1={114} y1={180} x2={108} y2={188} />
-          <Line x1={114} y1={180} x2={114} y2={189} />
-          <Line x1={114} y1={180} x2={120} y2={188} />
-        </G>
-
-        {/* Cream belly with chevrons */}
-        <Ellipse cx={100} cy={150} rx={30} ry={32} fill={C.belly} />
-        <G stroke={C.chevron} strokeWidth={2.5} strokeLinecap="round" fill="none">
-          <Path d="M88 150 L100 156 L112 150" />
-          <Path d="M88 162 L100 168 L112 162" />
-        </G>
-
-        {/* Heart face disc */}
-        <Path d={FACE_HEART} fill={C.faceCream} stroke={C.faceRim} strokeWidth={2.5} />
+        {/* Heart face mask */}
+        <Path d={FACE_HEART} fill={C.faceCream} stroke={C.faceRim} strokeWidth={2.5} strokeLinejoin="round" />
 
         {/* Sparkles */}
         {cfg.sparkle && (
-          <AnimatedG animatedProps={twinkleProps} stroke={cfg.sparkle} strokeWidth={3} strokeLinecap="round">
-            <Line x1={42} y1={54} x2={50} y2={62} />
-            <Line x1={158} y1={54} x2={150} y2={62} />
-            <Line x1={150} y1={48} x2={158} y2={48} />
-            <Line x1={42} y1={48} x2={50} y2={48} />
-            <Line x1={66} y1={34} x2={66} y2={24} />
-            <Line x1={134} y1={34} x2={134} y2={24} />
+          <AnimatedG animatedProps={twinkleProps} fill={cfg.sparkle}>
+            <Path d={star(30, 62, 9)} />
+            <Path d={star(44, 36, 5)} />
+            <Path d={star(172, 84, 6)} />
+            {cfg.mark === 'none' && <Path d={star(166, 46, 8)} />}
           </AnimatedG>
         )}
 
         {/* Eyes */}
         {cfg.eyes === 'happyClosed' && (
-          <G stroke={C.eye} strokeWidth={3.5} strokeLinecap="round" fill="none">
-            <Path d={`M ${EYE.lx - 12} ${EYE.cy + 3} Q ${EYE.lx} ${EYE.cy - 7} ${EYE.lx + 12} ${EYE.cy + 3}`} />
-            <Path d={`M ${EYE.rx - 12} ${EYE.cy + 3} Q ${EYE.rx} ${EYE.cy - 7} ${EYE.rx + 12} ${EYE.cy + 3}`} />
+          <G stroke={C.eye} strokeWidth={4} strokeLinecap="round" fill="none">
+            <Path d={`M ${EYE.lx - 11} ${EYE.cy + 4} Q ${EYE.lx} ${EYE.cy - 8} ${EYE.lx + 11} ${EYE.cy + 4}`} />
+            <Path d={`M ${EYE.rx - 11} ${EYE.cy + 4} Q ${EYE.rx} ${EYE.cy - 8} ${EYE.rx + 11} ${EYE.cy + 4}`} />
           </G>
         )}
         {cfg.eyes === 'sleepyClosed' && (
-          <G stroke={C.eye} strokeWidth={3.5} strokeLinecap="round" fill="none">
-            <Path d={`M ${EYE.lx - 12} ${EYE.cy} Q ${EYE.lx} ${EYE.cy + 8} ${EYE.lx + 12} ${EYE.cy}`} />
-            <Path d={`M ${EYE.rx - 12} ${EYE.cy} Q ${EYE.rx} ${EYE.cy + 8} ${EYE.rx + 12} ${EYE.cy}`} />
+          <G stroke={C.eye} strokeWidth={4} strokeLinecap="round" fill="none">
+            <Path d={`M ${EYE.lx - 11} ${EYE.cy} Q ${EYE.lx} ${EYE.cy + 7} ${EYE.lx + 11} ${EYE.cy}`} />
+            <Path d={`M ${EYE.rx - 11} ${EYE.cy} Q ${EYE.rx} ${EYE.cy + 7} ${EYE.rx + 11} ${EYE.cy}`} />
           </G>
         )}
         {cfg.eyes === 'winkL' && (
           <Path
-            d={`M ${EYE.lx - 11} ${EYE.cy} Q ${EYE.lx} ${EYE.cy + 7} ${EYE.lx + 11} ${EYE.cy}`}
+            d={`M ${EYE.lx - 10} ${EYE.cy + 1} Q ${EYE.lx} ${EYE.cy + 7} ${EYE.lx + 10} ${EYE.cy + 1}`}
             stroke={C.eye}
-            strokeWidth={3.5}
+            strokeWidth={4}
             strokeLinecap="round"
             fill="none"
           />
@@ -494,60 +499,71 @@ export function KwagiOwl({ mood = 'happy', size = 110, animate = true, peek }: P
         {leftOpen && renderOpenEye(EYE.lx, pupilPropsL, hiaPropsL, hibPropsL)}
         {rightOpen && renderOpenEye(EYE.rx, pupilPropsR, hiaPropsR, hibPropsR)}
 
-        {/* Sad brows */}
+        {/* Worried brows: inner ends lifted */}
         {cfg.brow === 'sad' && (
-          <G stroke={C.brow} strokeWidth={4} strokeLinecap="round">
-            <Line x1={EYE.lx - 14} y1={EYE.cy - 20} x2={EYE.lx + 12} y2={EYE.cy - 12} />
-            <Line x1={EYE.rx + 14} y1={EYE.cy - 20} x2={EYE.rx - 12} y2={EYE.cy - 12} />
+          <G stroke={C.brow} strokeWidth={3.5} strokeLinecap="round">
+            <Line x1={EYE.lx - 12} y1={EYE.cy - 15} x2={EYE.lx + 9} y2={EYE.cy - 21} />
+            <Line x1={EYE.rx + 12} y1={EYE.cy - 15} x2={EYE.rx - 9} y2={EYE.cy - 21} />
           </G>
         )}
 
-        {/* Beak / mouth */}
-        {cfg.mouth === 'beak' && <Polygon points="100,104 94,104 100,114" fill={C.beak} />}
-        {cfg.mouth === 'tiny' && <Polygon points="100,105 96,105 100,112" fill={C.beak} />}
-        {cfg.mouth === 'neutral' && <Polygon points="100,104 93,104 100,115" fill={C.beak} />}
+        {/* Mouth sits under the beak */}
         {cfg.mouth === 'smile' && (
-          <>
-            <Polygon points="100,102 93,102 100,112" fill={C.beak} />
-            <Path d="M 86 116 Q 100 130 114 116" stroke={C.beakDark} strokeWidth={3} fill="none" strokeLinecap="round" />
-          </>
+          <G>
+            <Path d="M90 106 Q100 124 110 106 Z" fill={C.mouth} stroke={C.outline} strokeWidth={2} strokeLinejoin="round" />
+            <Ellipse cx={100} cy={114} rx={4.5} ry={3} fill={C.tongue} />
+          </G>
         )}
         {cfg.mouth === 'frown' && (
-          <>
-            <Polygon points="100,104 93,104 100,114" fill={C.beak} />
-            <Path d="M 88 126 Q 100 116 112 126" stroke={C.beakDark} strokeWidth={3} fill="none" strokeLinecap="round" />
-          </>
+          <Path d="M91 119 Q100 111 109 119" stroke={C.outline} strokeWidth={3} fill="none" strokeLinecap="round" />
         )}
+
+        {/* Beak */}
+        <Path
+          d={cfg.mouth === 'tiny' ? 'M95 96 Q100 94 105 96 L101 104 Q100 106 99 104 Z' : 'M93 95 Q100 92 107 95 L101.5 107 Q100 110 98.5 107 Z'}
+          fill={C.beak}
+          stroke={C.outline}
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+
+        {/* Thinking: right wing raised to the chin */}
+        {chinWing && <G transform="translate(146, 134) rotate(108) scale(0.66)">{mirrored}</G>}
 
         {/* Per-mood corner marks (match the expression sheet) */}
         {cfg.mark === 'check' && (
-          <Path d="M144 56 L151 64 L165 48" stroke={C.teal} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M166 46 L174 54 L189 37" stroke={C.teal} strokeWidth={5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         )}
         {cfg.mark === 'cross' && (
-          <G stroke={C.wrong} strokeWidth={4} strokeLinecap="round">
-            <Line x1={148} y1={50} x2={164} y2={66} />
-            <Line x1={164} y1={50} x2={148} y2={66} />
+          <G stroke={C.wrong} strokeWidth={4.5} strokeLinecap="round">
+            <Line x1={169} y1={36} x2={184} y2={51} />
+            <Line x1={184} y1={36} x2={169} y2={51} />
           </G>
         )}
         {cfg.mark === 'question' && (
           <G>
             <Path
-              d="M148 54 C148 45 164 45 164 54 C164 61 155 60 155 68"
-              stroke={C.indigo}
-              strokeWidth={3.5}
+              d="M166 40 C166 30 184 30 184 40 C184 48 175 47 175 56"
+              stroke={C.question}
+              strokeWidth={4.5}
               fill="none"
               strokeLinecap="round"
             />
-            <Circle cx={155} cy={74} r={2.2} fill={C.indigo} />
+            <Circle cx={175} cy={63} r={2.8} fill={C.question} />
           </G>
         )}
         {cfg.mark === 'sleep' && (
           <G stroke={C.indigo} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <Polyline points="144,64 152,64 144,72 152,72" />
-            <Polyline points="156,48 168,48 156,62 168,62" />
+            <Polyline points="160,62 168,62 160,70 168,70" />
+            <Polyline points="172,36 186,36 172,52 186,52" />
           </G>
         )}
-        {cfg.mark === 'sleep' && <Ellipse cx={120} cy={112} rx={4} ry={5} fill={C.indigo} opacity={0.6} />}
+        {cfg.mark === 'sleep' && (
+          <G>
+            <Ellipse cx={111} cy={108} rx={6} ry={7} fill={C.bubble} opacity={0.85} stroke={C.outline} strokeWidth={1} />
+            <Circle cx={109} cy={105} r={1.8} fill={C.white} />
+          </G>
+        )}
         </G>
         </AnimatedG>
         </G>
