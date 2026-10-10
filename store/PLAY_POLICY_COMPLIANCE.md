@@ -19,6 +19,13 @@ The generated Android manifest was separately reviewed. App configuration blocks
 - All app features are available without special reviewer access.
 - Target audience is ages 18 and over.
 
+## Note import update (October 10, 2026)
+
+- New Android permission: `CAMERA`, used only when the student taps Take photo. `RECORD_AUDIO` stays blocked; legacy storage permissions stay blocked because the system photo and document pickers need no storage permission.
+- New SDK: Google ML Kit text recognition through Google Play services, configured to install its model with the app. Images are processed on the device. ML Kit may download models and send Google API usage and performance metrics, so recheck the Data safety answers (see `google-play-console-answers.md`).
+- PDF text uses PDFBox-Android (Apache 2.0) on Android and PDFKit on iOS. Word, PowerPoint, and text files are read in JavaScript. Kwagi deletes its temporary file copies after reading them, and only the reviewed note text is saved.
+- Expo Doctor's React Native Directory check excludes `expo-text-extractor`, `@paul_sizon/expo-pdf-text-extract`, and `fflate`. Their source was reviewed by hand. Rebuild and test both native platforms before relying on them.
+
 ## Manual gates
 
 The scan cannot approve legal declarations or predict Google review. The owner must make the Console answers match the exact signed bundle, complete IARC content rating, verify asset rights, accept Play App Signing and developer agreements, and repeat this review if an SDK or networked feature is added.

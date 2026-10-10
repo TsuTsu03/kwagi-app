@@ -1,6 +1,6 @@
 # Kwagi development plan
 
-Updated September 9, 2026. Current scope: a private, offline study app for students in any course. This plan supersedes the July launch schedule; it does not imply store availability.
+Updated October 10, 2026. Current scope: a private, offline study app for students in any course. This plan supersedes the July launch schedule; it does not imply store availability.
 
 ## Product outcome
 
@@ -19,6 +19,23 @@ Keep the Expo 57 / React Native / SQLite / AsyncStorage stack. The audit upgrade
 - Reduced-motion corrections, visible-side flashcard accessibility, clearer goal units, and course-neutral XP level names.
 
 Verification and remaining limitations are recorded in [CODEBASE_AUDIT.md](CODEBASE_AUDIT.md).
+
+## Study-material features (decided October 10, 2026)
+
+The owner chose to keep every new feature offline-first. These decisions apply until the owner revisits them:
+
+- **Processing:** on the device only. A cloud AI option may come later as an opt-in setting and needs its own privacy, cost, and Data safety review.
+- **Review before save:** imported text, transcripts, summaries, and generated cards are shown for review and editing before anything is stored.
+- **Storage:** keep text only by default. Kwagi deletes its temporary copies of imported files after reading them. Recordings will be optional to keep and excluded from backups.
+- **Platforms:** native-only features (photo, PDF, and recording) are hidden on the web and in Expo Go; pure-JavaScript readers work everywhere.
+- **Devices:** a basic path must work on budget Android phones; better on-device models are an optional extra where the hardware supports them.
+- **Model downloads:** large speech or language models are optional, Wi-Fi-only downloads rather than part of the install.
+
+| Slice | Status | Acceptance |
+| --- | --- | --- |
+| 1. Note import: photos (camera/library), PDF, Word, PowerPoint, text, Markdown | Source complete; native builds untested | Physical Android and iPhone builds read printed notes, handwriting (best effort), a text PDF, and a scanned PDF (clear rejection); first-launch offline OCR works on Android; temp files are removed; camera permission denial is handled |
+| 2. Lecture recording and on-device transcription | Not started | Background recording for 1 to 2 hours, chunked Whisper transcription with progress, English-first model, optional model download |
+| 3. Summaries and generated cards/quizzes | Not started | Extractive summary on every device, on-device LLM where supported, per-card source sentence, accept/edit/discard review, hand-graded accuracy on 20 to 30 real notes |
 
 ## Phase 1: Prove the offline beta on devices
 

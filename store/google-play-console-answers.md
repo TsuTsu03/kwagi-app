@@ -29,7 +29,7 @@ Prepared September 9, 2026 for package `com.stackwise.kwagi`, version `1.0.0`. T
 | Government app | No | Independent study utility |
 | Health app | No | No health feature or seeded medical advice; user-entered study text does not make the app a health app |
 | Financial features | None | No payments, lending, banking, investing, crypto, or financial advice |
-| AI-generated content | No | No AI service or generative feature |
+| AI-generated content | No | No AI service or generative feature. Photo import uses on-device text recognition, which copies text rather than generating content |
 | In-app purchases | No | No billing library or paid content |
 | App access instructions | No instructions required | Reviewers can launch the app and use all features offline |
 
@@ -40,6 +40,12 @@ For the content rating questionnaire, answer from the current binary: no violenc
 Use **No data collected** and **No data shared with third parties** for this binary. Local SQLite notes, cards, quiz history, and AsyncStorage preferences do not leave the device. Android cloud backup is disabled. The only export is initiated by the user through Backup and restore.
 
 If analytics, crash reporting, accounts, cloud sync, advertising, payments, push tokens, AI, or a remote API is added later, redo the Data safety form before uploading that update.
+
+### Note import (added October 10, 2026)
+
+Note import adds the `CAMERA` permission (through `expo-image-picker`) and Google ML Kit text recognition through Google Play services (through `expo-text-extractor`). Photos and their text are processed on the device and are not sent to the developer.
+
+**OWNER MUST REVIEW BEFORE THE NEXT UPLOAD:** Google states that ML Kit may contact Google servers to download models and may send API usage and performance metrics to Google. Compare Google's current ML Kit data disclosure guidance with the Data safety form, and change the "No data collected" answer if that guidance requires it for the SDK. Do not assume the earlier answer still applies.
 
 ## Store listing assets
 

@@ -1,6 +1,7 @@
 import { showAlert } from '@/lib/alert';
 import { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   BackHandler,
   Platform,
@@ -31,9 +32,23 @@ import {
   type SubjectWithCount,
 } from '@/lib/db/notes';
 import { generateFlashcards } from '@/lib/flashcardGenerator';
+import { importFromFile, importFromPhotos, ImportError, importSupport, type ImportedNote } from '@/lib/import';
 import { useThemeColors } from '@/hooks/useTheme';
 
 type NotesView = 'subjects' | 'notes' | 'editor';
+type ImportSource = 'camera' | 'library' | 'file';
+
+function importNoticeFor(note: ImportedNote): string {
+  const origin = note.kind === 'image'
+    ? `${note.sources} ${note.sources === 1 ? 'photo' : 'photos'}`
+    : 'your file';
+  const check = note.kind === 'image'
+    ? 'Check names, numbers, and symbols; handwriting is often misread.'
+    : 'Check that headings, tables, and symbols came through correctly.';
+  const cut = note.truncated ? ' Only the first part was imported because the text is very long.' : '';
+  return `Read from ${origin} on this device. Nothing is saved until you tap Save. ${check}${cut}`;
+}
+
 const SUBJECT_COLORS = ['#2DD4BF', '#F5A623', '#A78BFA', '#60A5FA', '#F472B6', '#34D399'];
 
 export default function NotesScreen() {
@@ -52,6 +67,9 @@ export default function NotesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [subjectBusy, setSubjectBusy] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState<ImportSource | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
 
   const refreshSubjects = useCallback(async () => {
     setLoading(true);
@@ -67,6 +85,7 @@ export default function NotesScreen() {
       setActiveSubject(subject);
       setNotes(await listNotes(subject.id));
       setQuery('');
+      setImportOpen(false);
       setView('notes');
     } catch {
       showAlert('Could not open subject', 'Your notes are still on this device. Please try again.');
@@ -102,8 +121,28 @@ export default function NotesScreen() {
     setEditing(note);
     setTitle(note?.title ?? '');
     setContent(note?.content ?? '');
+    setImportNotice(null);
     setView('editor');
   }, []);
+
+  const runImport = useCallback(async (source: ImportSource) => {
+    if (importing) return;
+    setImporting(source);
+    try {
+      const imported = source === 'file' ? await importFromFile() : await importFromPhotos(source);
+      if (!imported) return;
+      setEditing(null);
+      setTitle(imported.title);
+      setContent(imported.text);
+      setImportNotice(importNoticeFor(imported));
+      setImportOpen(false);
+      setView('editor');
+    } catch (error) {
+      showAlert('Could not import', error instanceof ImportError ? error.message : 'Nothing was saved. Please try again.');
+    } finally {
+      setImporting(null);
+    }
+  }, [importing]);
 
   const hasDraft = title !== (editing?.title ?? '') || content !== (editing?.content ?? '');
   const generatedPreview = useMemo(() => generateFlashcards(content), [content]);
@@ -186,6 +225,12 @@ export default function NotesScreen() {
               </PressableScale>
               <Text className="ml-1 flex-1 text-xl font-extrabold text-ink">{editing ? 'Edit note' : 'New note'}</Text>
             </View>
+            {importNotice && (
+              <View accessibilityLiveRegion="polite" className="mb-3 flex-row rounded-card border border-bordersoft bg-surface p-3">
+                <Ionicons name="scan-outline" size={18} color={c.teal} />
+                <Text className="ml-2 flex-1 text-xs leading-5 text-sub">{importNotice}</Text>
+              </View>
+            )}
             <TextInput value={title} onChangeText={setTitle} editable={!saving} accessibilityLabel="Note title" placeholder="Note title" placeholderTextColor={c.muted} className="mb-3 rounded-card border border-bordersoft bg-surface px-4 py-3 text-lg font-bold text-ink" />
             <TextInput
               value={content}
@@ -224,10 +269,39 @@ export default function NotesScreen() {
                 <Text className="text-xl font-extrabold text-ink">{activeSubject.name}</Text>
                 <Text className="text-sm text-sub">{notes.length} {notes.length === 1 ? 'note' : 'notes'}</Text>
               </View>
+              <PressableScale onPress={() => setImportOpen((open) => !open)} disabled={!!importing} accessibilityRole="button" accessibilityLabel="Import notes" accessibilityState={{ expanded: importOpen }} className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-bordersoft bg-surface">
+                <Ionicons name="document-text-outline" size={21} color={c.amber} />
+              </PressableScale>
               <PressableScale onPress={() => openEditor(null)} accessibilityRole="button" accessibilityLabel="New note" className="h-11 w-11 items-center justify-center rounded-full bg-amber">
                 <Ionicons name="add" size={24} color={c.bg} />
               </PressableScale>
             </View>
+            {importOpen && (
+              <Card className="mb-4">
+                <Text className="text-md font-bold text-ink">Import notes</Text>
+                <Text className="mt-1 text-sm leading-5 text-sub">
+                  {importSupport.photos
+                    ? 'Turn photos, PDFs, Word, PowerPoint, or text files into a note. Text is read on this device, and the original file is not kept.'
+                    : 'Turn Word, PowerPoint, text, or Markdown files into a note. Photo and PDF import work in the Android and iPhone app.'}
+                </Text>
+                {importing ? (
+                  <View accessibilityLiveRegion="polite" className="mt-4 flex-row items-center">
+                    <ActivityIndicator color={c.amber} />
+                    <Text className="ml-3 text-sm text-sub">Reading your notes...</Text>
+                  </View>
+                ) : (
+                  <View className="mt-4 gap-2">
+                    {importSupport.photos && (
+                      <View className="flex-row gap-2">
+                        <Button label="Take photo" variant="secondary" onPress={() => void runImport('camera')} className="flex-1" />
+                        <Button label="Choose photos" variant="secondary" onPress={() => void runImport('library')} className="flex-1" />
+                      </View>
+                    )}
+                    <Button label="Choose file" variant="secondary" onPress={() => void runImport('file')} />
+                  </View>
+                )}
+              </Card>
+            )}
             <View className="mb-4 flex-row items-center rounded-card border border-bordersoft bg-surface px-3">
               <Ionicons name="search" size={18} color={c.muted} />
               <TextInput value={query} onChangeText={setQuery} placeholder="Search notes" placeholderTextColor={c.muted} className="ml-2 min-h-11 flex-1 text-md text-ink" />

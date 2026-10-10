@@ -4,17 +4,24 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@paul_sizon/expo-pdf-text-extract": "^1.0.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.21",
     "expo-constants": "~57.0.17",
+    "expo-document-picker": "~57.0.1",
+    "expo-file-system": "~57.0.6",
     "expo-font": "~57.0.3",
     "expo-haptics": "~57.0.2",
+    "expo-image-manipulator": "~57.0.16",
+    "expo-image-picker": "~57.0.16",
     "expo-linking": "~57.0.9",
     "expo-router": "~57.0.20",
     "expo-splash-screen": "~57.0.8",
     "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.3",
+    "expo-text-extractor": "^2.0.0",
+    "fflate": "^0.8.3",
     "nativewind": "^4.2.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -51,5 +58,16 @@
     "assets:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-store-assets.ps1",
     "release:check": "npm run lint && npm run typecheck && npm test && npm run doctor && npm run export"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-text-extractor",
+          "@paul_sizon/expo-pdf-text-extract",
+          "fflate"
+        ]
+      }
+    }
+  }
 }

@@ -55,7 +55,16 @@
           }
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Kwagi reads the text in photos you choose so you can turn them into notes. Photos stay on your device.",
+          "cameraPermission": "Kwagi uses the camera to photograph your notes and read their text on your device.",
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/withMlKitTextModel"
     ],
     "extra": {
       "router": {},
