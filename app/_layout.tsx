@@ -9,6 +9,7 @@ import { colorScheme } from 'nativewind';
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated';
 import { useAppStore } from '@/lib/store';
 import { getDb } from '@/lib/db/client';
+import { sweepOrphanFiles } from '@/lib/attachmentFiles';
 import { useThemeColors, useIsDark } from '@/hooks/useTheme';
 import { PeekingKwagi } from '@/components/kwagi/PeekingKwagi';
 
@@ -26,7 +27,11 @@ export default function RootLayout() {
   useEffect(() => {
     void hydrate();
     // Warm up the DB (runs schema + first-launch seed).
-    void getDb().then(() => setDbError(false)).catch(() => setDbError(true));
+    void getDb().then(() => {
+      setDbError(false);
+      // Remove kept files left behind by deleted notes, restores, or interrupted saves.
+      void sweepOrphanFiles().catch(() => undefined);
+    }).catch(() => setDbError(true));
   }, [hydrate]);
 
   // Apply the user's saved theme preference (light / dark / follow system).
@@ -62,6 +67,7 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="backup" />
+          <Stack.Screen name="storage" />
           <Stack.Screen name="legal" />
         </Stack>
         {/* Omnipresent study buddy, mounted once above every screen. Hidden during onboarding so it never covers the form. */}

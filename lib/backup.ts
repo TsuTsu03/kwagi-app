@@ -20,7 +20,9 @@ export async function restoreBackup(raw: string): Promise<void> {
   let settingsSaved = false;
   try {
     await withWriteTransaction(db, async (tx) => {
+      // Kept files are not in backups; their records go with the replaced notes.
       await tx.execAsync(`
+        DELETE FROM attachments;
         DELETE FROM quiz_answers;
         DELETE FROM quiz_sessions;
         DELETE FROM flashcards;

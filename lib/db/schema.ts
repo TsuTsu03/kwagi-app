@@ -72,7 +72,21 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   xp_earned INTEGER DEFAULT 0
 );
 
+-- Original files kept on the device for a note. The file itself lives in the app's
+-- attachments folder; \`file_name\` is relative so it survives iOS container moves.
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  file_name TEXT NOT NULL UNIQUE,
+  mime_type TEXT,
+  size INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER
+);
+
 CREATE INDEX IF NOT EXISTS idx_notes_subject ON notes(subject_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_note ON attachments(note_id);
 CREATE INDEX IF NOT EXISTS idx_flashcards_due ON flashcards(next_review);
 CREATE INDEX IF NOT EXISTS idx_flashcards_subject ON flashcards(subject_id);
 CREATE INDEX IF NOT EXISTS idx_flashcards_board ON flashcards(board);

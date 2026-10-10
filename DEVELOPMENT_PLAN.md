@@ -26,7 +26,7 @@ The owner chose to keep every new feature offline-first. These decisions apply u
 
 - **Processing:** on the device only. A cloud AI option may come later as an opt-in setting and needs its own privacy, cost, and Data safety review.
 - **Review before save:** imported text, transcripts, summaries, and generated cards are shown for review and editing before anything is stored.
-- **Storage:** keep text only by default. Kwagi deletes its temporary copies of imported files after reading them. Recordings will be optional to keep and excluded from backups.
+- **Storage:** local data and local file storage first; avoid cloud databases and cloud file storage. Kept originals (photos, PDFs, Office files, later recordings) live in the app's documents folder with an `attachments` record per file, are optional per import, are shown per subject in Settings > Storage, and are excluded from JSON backups. Photos are kept as upright 2400 px JPEGs (about 1 MB).
 - **Platforms:** native-only features (photo, PDF, and recording) are hidden on the web and in Expo Go; pure-JavaScript readers work everywhere.
 - **Devices:** a basic path must work on budget Android phones; better on-device models are an optional extra where the hardware supports them.
 - **Model downloads:** large speech or language models are optional, Wi-Fi-only downloads rather than part of the install.
@@ -34,6 +34,7 @@ The owner chose to keep every new feature offline-first. These decisions apply u
 | Slice | Status | Acceptance |
 | --- | --- | --- |
 | 1. Note import: photos (camera/library), PDF, Word, PowerPoint, text, Markdown | Source complete; native builds untested | Physical Android and iPhone builds read printed notes, handwriting (best effort), a text PDF, and a scanned PDF (clear rejection); first-launch offline OCR works on Android; temp files are removed; camera permission denial is handled |
+| 1b. Local storage for kept originals | Source complete; native builds untested | Kept files survive app restart and update, open in another app, are removed with their note/subject/restore/clear, orphan sweep runs at launch, low-space guard keeps note text |
 | 2. Lecture recording and on-device transcription | Not started | Background recording for 1 to 2 hours, chunked Whisper transcription with progress, English-first model, optional model download |
 | 3. Summaries and generated cards/quizzes | Not started | Extractive summary on every device, on-device LLM where supported, per-card source sentence, accept/edit/discard review, hand-graded accuracy on 20 to 30 real notes |
 

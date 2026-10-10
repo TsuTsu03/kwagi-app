@@ -1,5 +1,5 @@
 import { showAlert } from '@/lib/alert';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -7,6 +7,7 @@ import {
   FlatList,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
@@ -36,6 +37,8 @@ import {
 } from '@/lib/db/notes';
 import { generateFlashcards } from '@/lib/flashcardGenerator';
 import { importFromFile, importFromPhotos, ImportError, importSupport, type ImportedNote } from '@/lib/import';
+import { discardPending, keepOriginals, StorageFullError, supportsOriginals, sweepOrphanFiles, type PendingOriginal } from '@/lib/attachmentFiles';
+import { AttachmentList } from '@/components/notes/AttachmentList';
 import { useThemeColors } from '@/hooks/useTheme';
 
 type NotesView = 'subjects' | 'notes' | 'editor';
@@ -49,7 +52,9 @@ function importNoticeFor(note: ImportedNote): string {
     ? 'Check names, numbers, and symbols; handwriting is often misread.'
     : 'Check that headings, tables, and symbols came through correctly.';
   const cut = note.truncated ? ' Only the first part was imported because the text is very long.' : '';
-  return `Read from ${origin} on this device. Nothing is saved until you tap Save. ${check}${cut}`;
+  if (!note.text) return `No text was found in ${origin}. The original will be kept with this note when you tap Save, so add your own notes here.`;
+  const kept = note.originals.length ? ' The original is kept on this phone when you save.' : '';
+  return `Read from ${origin} on this device. Nothing is saved until you tap Save. ${check}${cut}${kept}`;
 }
 
 const SUBJECT_COLORS = ['#2DD4BF', '#F5A623', '#A78BFA', '#60A5FA', '#F472B6', '#34D399'];
@@ -74,6 +79,15 @@ export default function NotesScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState<ImportSource | null>(null);
   const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [keepFiles, setKeepFiles] = useState(supportsOriginals);
+  const [pending, setPending] = useState<PendingOriginal[]>([]);
+  const pendingRef = useRef<PendingOriginal[]>([]);
+  /** Swap the files waiting to be kept, deleting the cached copies that are dropped. */
+  const replacePending = useCallback((next: PendingOriginal[]) => {
+    discardPending(pendingRef.current.filter((file) => !next.includes(file)));
+    pendingRef.current = next;
+    setPending(next);
+  }, []);
 
   const refreshSubjects = useCallback(async () => {
     setLoading(true);
@@ -133,8 +147,9 @@ export default function NotesScreen() {
     setTitle(note?.title ?? '');
     setContent(note?.content ?? '');
     setImportNotice(null);
+    replacePending([]);
     setView('editor');
-  }, []);
+  }, [replacePending]);
   const openNote = useCallback(async (summary: NoteSummary) => {
     try {
       const note = await getNote(summary.id);
@@ -149,8 +164,10 @@ export default function NotesScreen() {
     if (importing) return;
     setImporting(source);
     try {
-      const imported = source === 'file' ? await importFromFile() : await importFromPhotos(source);
+      const options = { keepOriginals: keepFiles };
+      const imported = source === 'file' ? await importFromFile(options) : await importFromPhotos(source, options);
       if (!imported) return;
+      replacePending(imported.originals);
       setEditing(null);
       setTitle(imported.title);
       setContent(imported.text);
@@ -162,18 +179,18 @@ export default function NotesScreen() {
     } finally {
       setImporting(null);
     }
-  }, [importing]);
+  }, [importing, keepFiles, replacePending]);
 
-  const hasDraft = title !== (editing?.title ?? '') || content !== (editing?.content ?? '');
+  const hasDraft = title !== (editing?.title ?? '') || content !== (editing?.content ?? '') || pending.length > 0;
   const generatedPreview = useMemo(() => generateFlashcards(content), [content]);
   const leaveEditor = useCallback(() => {
     if (saving) return;
     if (!hasDraft) { setView('notes'); return; }
     showAlert('Discard unsaved changes?', 'Save your note first if you want to keep these changes.', [
       { text: 'Keep editing', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => setView('notes') },
+      { text: 'Discard', style: 'destructive', onPress: () => { replacePending([]); setView('notes'); } },
     ]);
-  }, [hasDraft, saving]);
+  }, [hasDraft, replacePending, saving]);
   useFocusEffect(useCallback(() => {
     const listener = BackHandler.addEventListener('hardwareBackPress', () => {
       if (view === 'editor') { leaveEditor(); return true; }
@@ -187,6 +204,7 @@ export default function NotesScreen() {
     if (!activeSubject) return;
     try {
       await action();
+      void sweepOrphanFiles().catch(() => undefined);
       setNotes(await listNoteSummaries(activeSubject.id));
       await refreshSubjects();
     } catch {
@@ -195,7 +213,7 @@ export default function NotesScreen() {
   }, [activeSubject, refreshSubjects]);
 
   const updateSubjects = useCallback(async (action: () => Promise<void>) => {
-    try { await action(); await refreshSubjects(); }
+    try { await action(); void sweepOrphanFiles().catch(() => undefined); await refreshSubjects(); }
     catch { showAlert('Could not update subjects', 'Nothing was changed. Please try again.'); }
   }, [refreshSubjects]);
 
@@ -211,6 +229,7 @@ export default function NotesScreen() {
     setSaving(true);
     try {
       const cleanTitle = title.trim() || 'Untitled note';
+      let noteId = editing?.id;
       if (makeCards) {
         const generated = generateFlashcards(content);
         if (!generated.length) {
@@ -218,11 +237,22 @@ export default function NotesScreen() {
           return;
         }
         const result = await saveNoteWithCards({ noteId: editing?.id, subjectId: activeSubject.id, subjectName: activeSubject.name, title: cleanTitle, content, cards: generated });
+        noteId = result.noteId;
         showAlert(result.cardsCreated ? 'Cards created' : 'Cards already up to date', result.cardsCreated ? `${result.cardsCreated} cards added to ${activeSubject.name}.` : 'No duplicate cards were added.');
       } else if (editing?.id) {
         await updateNote(editing.id, { title: cleanTitle, content });
       } else {
-        await createNote({ subject_id: activeSubject.id, title: cleanTitle, content });
+        noteId = await createNote({ subject_id: activeSubject.id, title: cleanTitle, content });
+      }
+      if (noteId && pending.length) {
+        const files = pending;
+        pendingRef.current = [];
+        setPending([]);
+        try {
+          await keepOriginals(noteId, files);
+        } catch (error) {
+          showAlert('Original files not kept', error instanceof StorageFullError ? error.message : 'Your note text was saved, but the original files could not be kept on this phone.');
+        }
       }
       setNotes(await listNoteSummaries(activeSubject.id));
       await refreshSubjects();
@@ -232,7 +262,7 @@ export default function NotesScreen() {
     } finally {
       setSaving(false);
     }
-  }, [activeSubject, content, editing, refreshSubjects, saving, title]);
+  }, [activeSubject, content, editing, pending, refreshSubjects, saving, title]);
 
   if (view === 'editor') {
     return (
@@ -251,6 +281,7 @@ export default function NotesScreen() {
                 <Text className="ml-2 flex-1 text-xs leading-5 text-sub">{importNotice}</Text>
               </View>
             )}
+            <AttachmentList noteId={editing?.id} pending={pending} disabled={saving} onRemovePending={(index) => replacePending(pending.filter((_, i) => i !== index))} />
             <TextInput value={title} onChangeText={setTitle} editable={!saving} accessibilityLabel="Note title" placeholder="Note title" placeholderTextColor={c.muted} className="mb-3 rounded-card border border-bordersoft bg-surface px-4 py-3 text-lg font-bold text-ink" />
             <TextInput
               value={content}
@@ -308,7 +339,7 @@ export default function NotesScreen() {
                 <Text className="text-md font-bold text-ink">Import notes</Text>
                 <Text className="mt-1 text-sm leading-5 text-sub">
                   {importSupport.photos
-                    ? 'Turn photos, PDFs, Word, PowerPoint, or text files into a note. Text is read on this device, and the original file is not kept.'
+                    ? 'Turn photos, PDFs, Word, PowerPoint, or text files into a note. Everything is read and stored on this phone, not in the cloud.'
                     : 'Turn Word, PowerPoint, text, or Markdown files into a note. Photo and PDF import work in the Android and iPhone app.'}
                 </Text>
                 {importing ? (
@@ -325,6 +356,12 @@ export default function NotesScreen() {
                       </View>
                     )}
                     <Button label="Choose file" variant="secondary" onPress={() => void runImport('file')} />
+                    {supportsOriginals && (
+                      <View className="mt-2 flex-row items-center">
+                        <Text className="flex-1 text-sm leading-5 text-sub">Keep original photos and files on this phone</Text>
+                        <Switch value={keepFiles} onValueChange={setKeepFiles} accessibilityLabel="Keep original photos and files on this phone" trackColor={{ true: c.amber, false: c.muted }} />
+                      </View>
+                    )}
                   </View>
                 )}
               </Card>

@@ -34,4 +34,4 @@ What these numbers are and are not:
 - **Typing in a 100,000-character note** took about 180 ms per keystroke in the throttled browser. Check on a real phone; if it lags, lower the per-note limit or split imports.
 - **Card library and quizzes load every matching card** (40k cards: about 220 ms in Node). Rows are virtualized, but a SQL-paged card library is the next step past about 40k cards.
 - **Backups of very large libraries** (around 50 MB) are parsed in memory. That should be fine on most phones but needs a test on a low-RAM Android device.
-- **Media is not stored.** Imports keep text only, so photos, PDFs, and recordings add no lasting storage today. Keeping originals needs its own storage design (see `DEVELOPMENT_PLAN.md`).
+- **Kept originals use phone storage.** Kept photos are resized to about 1 MB; PDFs and Office files are stored as-is (up to 100 MB for PDFs). Kwagi refuses to keep files when less than 200 MB would remain free, and Settings > Storage shows use per subject. Lecture recordings (planned) are estimated at 15 to 30 MB per hour of speech-quality audio.

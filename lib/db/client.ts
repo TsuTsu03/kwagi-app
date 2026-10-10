@@ -131,6 +131,7 @@ export async function clearAllData(reseed = true): Promise<void> {
   const db = await getDb();
   await withWriteTransaction(db, async (tx) => {
     await tx.execAsync(`
+      DELETE FROM attachments;
       DELETE FROM quiz_answers;
       DELETE FROM quiz_sessions;
       DELETE FROM flashcards;

@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File as FsFile, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { discardPending, fileSize, supportsOriginals, type PendingOriginal } from '@/lib/attachmentFiles';
 import { decodeTextFile, DocumentReadError, extractDocxText, extractPptxText } from './office';
 import { detectImportKind, joinSections, prepareImportedText, RAW_IMPORT_CHARS, titleFromFileName, type ImportKind } from './text';
 
@@ -15,15 +16,28 @@ export interface ImportedNote {
   kind: ImportKind;
   /** The text was cut to keep the editor responsive. */
   truncated: boolean;
+  /** Original files waiting to be kept with the note when it is saved. */
+  originals: PendingOriginal[];
+}
+
+export interface ImportOptions {
+  /** Keep the photo or file on this phone alongside the note text. */
+  keepOriginals: boolean;
 }
 
 /** A problem the student can act on; the message is safe to show as-is. */
 export class ImportError extends Error {}
 
+/** Word, PowerPoint, and text files are read in JavaScript, so they stay small. */
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
+/** PDFs and photos are read natively and may be kept as originals. */
+const MAX_NATIVE_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_PHOTOS = 20;
-/** Longest image edge sent to text recognition; larger photos cost memory without reading better. */
-const MAX_OCR_EDGE = 3000;
+/**
+ * Longest image edge for text recognition and for the kept copy. 2400 px reads lecture notes
+ * well and keeps a kept photo near 1 MB instead of the 3 to 5 MB an iPhone original takes.
+ */
+const MAX_PHOTO_EDGE = 2400;
 
 /** OCR and PDF reading are native-only and absent from Expo Go or builds made before these modules were added. */
 export const importSupport = {
@@ -43,31 +57,39 @@ function discardCachedCopy(uri: string | undefined) {
   try { new FsFile(uri).delete(); } catch { /* the OS clears its cache eventually */ }
 }
 
-function finish(kind: ImportKind, title: string, sections: string[]): ImportedNote {
+function finish(kind: ImportKind, title: string, sections: string[], originals: PendingOriginal[] = []): ImportedNote {
   const { text, truncated } = prepareImportedText(joinSections(sections));
-  if (!text) {
+  // A scanned PDF or a photo without text is still worth keeping when the student asked for originals.
+  if (!text && !originals.length) {
     throw new ImportError(kind === 'image'
       ? 'No readable text was found. Try a brighter, sharper photo taken straight on.'
       : kind === 'pdf'
         ? 'This PDF has no selectable text, which usually means it is a scan. Take photos of the pages instead.'
         : 'This file has no text to import.');
   }
-  return { title, text, sources: sections.length, kind, truncated };
+  return { title, text, sources: sections.length, kind, truncated, originals };
 }
 
-async function recognizeImage(uri: string): Promise<string> {
+/** Read a photo's text. With `keep`, the upright, resized JPEG is returned as a pending original. */
+async function recognizeImage(uri: string, name: string, keep: boolean): Promise<{ text: string; original: PendingOriginal | null }> {
   // Rendering applies the photo's EXIF rotation, so text reaches the recognizer upright.
   const upright = await ImageManipulator.manipulate(uri).renderAsync();
   const longest = Math.max(upright.width, upright.height);
-  const image = longest > MAX_OCR_EDGE
+  const image = longest > MAX_PHOTO_EDGE
     ? await ImageManipulator.manipulate(upright)
-      .resize(upright.width >= upright.height ? { width: MAX_OCR_EDGE } : { height: MAX_OCR_EDGE })
+      .resize(upright.width >= upright.height ? { width: MAX_PHOTO_EDGE } : { height: MAX_PHOTO_EDGE })
       .renderAsync()
     : upright;
-  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.92 });
+  const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
+  let kept = false;
   try {
     const { extractTextFromImage } = await import('expo-text-extractor');
-    return (await extractTextFromImage(saved.uri)).join('\n');
+    const text = (await extractTextFromImage(saved.uri)).join('\n');
+    kept = keep;
+    const original = keep
+      ? { uri: saved.uri, name: `${name.replace(/\.[a-z0-9]+$/i, '')}.jpg`, kind: 'image' as const, mimeType: 'image/jpeg', size: fileSize(saved.uri) }
+      : null;
+    return { text, original };
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (/download/i.test(message)) {
@@ -75,14 +97,14 @@ async function recognizeImage(uri: string): Promise<string> {
     }
     throw error;
   } finally {
-    discardCachedCopy(saved.uri);
+    if (!kept) discardCachedCopy(saved.uri);
     upright.release();
     if (image !== upright) image.release();
   }
 }
 
 /** Read printed or handwritten notes from the camera or photo library. Resolves `null` when cancelled. */
-export async function importFromPhotos(source: 'camera' | 'library'): Promise<ImportedNote | null> {
+export async function importFromPhotos(source: 'camera' | 'library', options: ImportOptions): Promise<ImportedNote | null> {
   if (!importSupport.photos) throw new ImportError('Reading photos needs the latest Kwagi app on Android or iPhone.');
 
   let result: ImagePicker.ImagePickerResult;
@@ -103,14 +125,23 @@ export async function importFromPhotos(source: 'camera' | 'library'): Promise<Im
   }
   if (result.canceled || !result.assets.length) return null;
 
+  const keep = options.keepOriginals && supportsOriginals;
   const pages: string[] = [];
+  const originals: PendingOriginal[] = [];
   try {
-    for (const asset of result.assets.slice(0, MAX_PHOTOS)) pages.push(await recognizeImage(asset.uri));
+    for (const [index, asset] of result.assets.slice(0, MAX_PHOTOS).entries()) {
+      const page = await recognizeImage(asset.uri, asset.fileName ?? `Photo ${index + 1}`, keep);
+      pages.push(page.text);
+      if (page.original) originals.push(page.original);
+    }
+    const date = new Date().toLocaleDateString();
+    return finish('image', pages.length > 1 ? `Photo notes (${pages.length} pages) ${date}` : `Photo notes ${date}`, pages, originals);
+  } catch (error) {
+    discardPending(originals);
+    throw error;
   } finally {
     for (const asset of result.assets) discardCachedCopy(asset.uri);
   }
-  const date = new Date().toLocaleDateString();
-  return finish('image', pages.length > 1 ? `Photo notes (${pages.length} pages) ${date}` : `Photo notes ${date}`, pages);
 }
 
 async function readBytes(asset: DocumentPicker.DocumentPickerAsset): Promise<Uint8Array> {
@@ -126,7 +157,7 @@ async function readPdf(uri: string): Promise<string> {
 }
 
 /** Import a PDF, Word, PowerPoint, text, or image file. Resolves `null` when cancelled. */
-export async function importFromFile(): Promise<ImportedNote | null> {
+export async function importFromFile(options: ImportOptions): Promise<ImportedNote | null> {
   const result = await DocumentPicker.getDocumentAsync({
     // Android providers often report Markdown and Office files with generic MIME types, so filter after picking.
     type: Platform.OS === 'web' ? WEB_FILE_TYPES : '*/*',
@@ -135,29 +166,50 @@ export async function importFromFile(): Promise<ImportedNote | null> {
   });
   if (result.canceled || !result.assets.length) return null;
   const asset = result.assets[0];
+  const keep = options.keepOriginals && supportsOriginals;
+  // The picker's cached copy becomes the kept original instead of being deleted.
+  const keepAsset = (kind: 'pdf' | 'document'): PendingOriginal[] => (keep
+    ? [{ uri: asset.uri, name: asset.name, kind, mimeType: asset.mimeType ?? null, size: asset.size ?? fileSize(asset.uri) }]
+    : []);
+  let keptAsset = false;
+  let originals: PendingOriginal[] = [];
 
   try {
     const kind = detectImportKind(asset.name, asset.mimeType);
     if (!kind) throw new ImportError('Kwagi can import PDF, Word (.docx), PowerPoint (.pptx), text, Markdown, and photo files.');
-    if (asset.size != null && asset.size > MAX_FILE_BYTES) throw new ImportError('This file is larger than 25 MB. Split it into smaller files and try again.');
+    const limit = kind === 'pdf' || kind === 'image' ? MAX_NATIVE_FILE_BYTES : MAX_FILE_BYTES;
+    const tooLarge = `This file is larger than ${limit / 1024 / 1024} MB. Split it into smaller files and try again.`;
+    if (asset.size != null && asset.size > limit) throw new ImportError(tooLarge);
 
     const title = titleFromFileName(asset.name);
     if (kind === 'image') {
       if (!importSupport.photos) throw new ImportError('Reading photos needs the latest Kwagi app on Android or iPhone.');
-      return finish(kind, title, [await recognizeImage(asset.uri)]);
+      const page = await recognizeImage(asset.uri, asset.name, keep);
+      originals = page.original ? [page.original] : [];
+      return finish(kind, title, [page.text], originals);
     }
-    if (kind === 'pdf') return finish(kind, title, [await readPdf(asset.uri)]);
+    if (kind === 'pdf') {
+      const text = await readPdf(asset.uri);
+      originals = keepAsset('pdf');
+      keptAsset = originals.length > 0;
+      return finish(kind, title, [text], originals);
+    }
 
     const bytes = await readBytes(asset);
-    if (bytes.byteLength > MAX_FILE_BYTES) throw new ImportError('This file is larger than 25 MB. Split it into smaller files and try again.');
+    if (bytes.byteLength > MAX_FILE_BYTES) throw new ImportError(tooLarge);
     const text = kind === 'docx' ? extractDocxText(bytes, RAW_IMPORT_CHARS)
       : kind === 'pptx' ? extractPptxText(bytes, RAW_IMPORT_CHARS)
         : decodeTextFile(bytes, RAW_IMPORT_CHARS);
-    return finish(kind, title, [text]);
+    // Plain text is fully captured by the note, so only Office files are worth keeping.
+    originals = kind === 'text' ? [] : keepAsset('document');
+    keptAsset = originals.length > 0;
+    return finish(kind, title, [text], originals);
   } catch (error) {
+    discardPending(originals);
+    keptAsset = false;
     if (error instanceof DocumentReadError) throw new ImportError(error.message);
     throw error;
   } finally {
-    discardCachedCopy(asset.uri);
+    if (!keptAsset) discardCachedCopy(asset.uri);
   }
 }

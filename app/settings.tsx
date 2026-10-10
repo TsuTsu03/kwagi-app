@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useAppStore } from '@/lib/store';
 import { clearAllData } from '@/lib/db/client';
+import { sweepOrphanFiles } from '@/lib/attachmentFiles';
 import { useThemeColors } from '@/hooks/useTheme';
 import type { AnimationPreference, ThemePref } from '@/lib/storage/settings';
 
@@ -46,7 +47,7 @@ export default function SettingsScreen() {
     if (busy) return;
     setBusy(true);
     let databaseCleared = false;
-    try { await clearAllData(false); databaseCleared = true; await reset(); router.replace('/onboarding'); }
+    try { await clearAllData(false); databaseCleared = true; await sweepOrphanFiles().catch(() => undefined); await reset(); router.replace('/onboarding'); }
     catch { showAlert(databaseCleared ? 'Preferences could not reset' : 'Could not clear data', databaseCleared ? 'Study data was removed, but preferences may remain. Close and reopen Kwagi, then try Clear all data again.' : 'Kwagi could not remove your data. Please try again.'); }
     finally { setBusy(false); setConfirmingClear(false); }
   };
@@ -70,9 +71,10 @@ export default function SettingsScreen() {
         <Section label="STUDY" icon="book"><Text className="text-md text-ink">Daily goal</Text><Text className="mt-1 text-sm text-sub">Card reviews and quiz answers count toward your goal.</Text><View className="mt-3 flex-row flex-wrap gap-2">{GOALS.map((goal) => <PressableScale key={goal} onPress={() => persistGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: settings.dailyGoal === goal }} className={`min-h-11 justify-center rounded-pill border px-4 py-2 ${settings.dailyGoal === goal ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={settings.dailyGoal === goal ? 'font-bold text-amber' : 'text-sub'}>{goal}</Text></PressableScale>)}</View></Section>
         <Section label="DATA & SUPPORT" icon="server">
           <SettingLink icon="download-outline" label="Backup and restore" onPress={() => router.push('/backup')} />
+          <SettingLink icon="folder-open-outline" label="Storage" onPress={() => router.push('/storage')} />
           <SettingLink icon="shield-checkmark-outline" label="Privacy and study disclaimer" onPress={() => router.push('/legal')} />
           <SettingLink icon="trash-outline" label={busy ? 'Clearing...' : 'Clear all data'} danger disabled={busy} onPress={() => setConfirmingClear(true)} />
-          {confirmingClear && <View className="mt-3 rounded-card border border-coral bg-coral/10 p-3"><Text className="font-bold text-ink">Delete all local data?</Text><Text className="mt-1 text-sm leading-5 text-sub">This removes your notes, cards, quiz history, progress, and preferences. This cannot be undone.</Text><View className="mt-3 flex-row gap-2"><PressableScale onPress={() => void clear()} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card bg-coral"><Text className="font-bold text-bg">{busy ? 'Clearing...' : 'Delete everything'}</Text></PressableScale><PressableScale onPress={() => setConfirmingClear(false)} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card border border-bordersoft"><Text className="font-bold text-ink">Cancel</Text></PressableScale></View></View>}
+          {confirmingClear && <View className="mt-3 rounded-card border border-coral bg-coral/10 p-3"><Text className="font-bold text-ink">Delete all local data?</Text><Text className="mt-1 text-sm leading-5 text-sub">This removes your notes, cards, kept files, quiz history, progress, and preferences. This cannot be undone.</Text><View className="mt-3 flex-row gap-2"><PressableScale onPress={() => void clear()} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card bg-coral"><Text className="font-bold text-bg">{busy ? 'Clearing...' : 'Delete everything'}</Text></PressableScale><PressableScale onPress={() => setConfirmingClear(false)} disabled={busy} accessibilityRole="button" className="min-h-11 flex-1 items-center justify-center rounded-card border border-bordersoft"><Text className="font-bold text-ink">Cancel</Text></PressableScale></View></View>}
         </Section>
         <Section label="ABOUT" icon="information-circle"><Text className="text-md font-bold text-ink">Kwagi, Your Study Buddy</Text><Text className="mt-1 text-xs text-sub">v1.0.0 · For college students in any course</Text><Text className="mt-2 text-xs leading-5 text-muted">Kwagi helps you organize subjects, practice active recall, and review consistently. It does not replace your instructors or official course materials.</Text></Section>
       </Container></ScrollView>

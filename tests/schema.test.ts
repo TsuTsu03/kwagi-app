@@ -18,3 +18,10 @@ test('schema creates indexes for due cards and parent lookups', () => {
 test('offline v1 schema does not retain the removed chat surface', () => {
   assert.doesNotMatch(SCHEMA_SQL, /chat_messages/i);
 });
+
+test('attachments belong to notes and store a relative file name', () => {
+  assert.match(SCHEMA_SQL, /CREATE TABLE IF NOT EXISTS attachments/i);
+  assert.match(SCHEMA_SQL, /note_id TEXT NOT NULL REFERENCES notes\(id\) ON DELETE CASCADE/i);
+  assert.match(SCHEMA_SQL, /file_name TEXT NOT NULL UNIQUE/i);
+  assert.match(SCHEMA_SQL, /idx_attachments_note/i);
+});

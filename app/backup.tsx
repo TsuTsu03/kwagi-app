@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { createBackup, restoreBackup } from '@/lib/backup';
 import { MAX_BACKUP_CHARS, parseBackup } from '@/lib/backupValidation';
 import { pickBackupFile, saveBackupFile } from '@/lib/backupFile';
+import { sweepOrphanFiles } from '@/lib/attachmentFiles';
 import { useAppStore } from '@/lib/store';
 import { useThemeColors } from '@/hooks/useTheme';
 
@@ -87,6 +88,7 @@ export default function BackupScreen() {
     try {
       await yieldToUi();
       await restoreBackup(pickedRaw.current ?? raw);
+      await sweepOrphanFiles().catch(() => undefined);
       await hydrate();
       pickedRaw.current = null;
       setPickedName('');
@@ -110,7 +112,7 @@ export default function BackupScreen() {
           {!!message && <View accessibilityLiveRegion="polite" className={`mb-4 rounded-card border p-3 ${failed ? 'border-coral' : 'border-teal'}`}><Text className={failed ? 'text-coral' : 'text-ink'}>{message}</Text></View>}
           <Card className="mb-4">
             <Text className="text-md font-bold text-ink">Keep a copy of your library</Text>
-            <Text className="mb-4 mt-1 text-sm leading-5 text-sub">Save your subjects, notes, cards, quiz history, and preferences. Backups contain private study content. Store them somewhere you trust.</Text>
+            <Text className="mb-4 mt-1 text-sm leading-5 text-sub">Save your subjects, notes, cards, quiz history, and preferences. Kept photos and files are not included. Backups contain private study content. Store them somewhere you trust.</Text>
             <Button label={busy ? 'Working...' : Platform.OS === 'web' ? 'Download backup' : 'Share backup'} disabled={busy || confirming} onPress={() => void exportData()} />
             {!!exported && <View className="mt-4"><Text className="mb-2 text-sm text-sub">Backup text (select all and copy)</Text><TextInput value={exported} editable={false} selectTextOnFocus accessibilityLabel="Exported backup JSON" multiline textAlignVertical="top" className="max-h-[200px] min-h-[120px] rounded-card border border-bordersoft bg-card p-3 text-xs text-ink" /></View>}
           </Card>
@@ -123,7 +125,7 @@ export default function BackupScreen() {
             {confirming ? <View className="rounded-card border border-coral p-3">
               <Text className="font-bold text-ink">Replace all current data?</Text>
               {!!pickedName && <Text className="mt-1 text-sm text-sub">From {pickedName}</Text>}
-              <Text className="mb-3 mt-1 text-sm leading-5 text-sub">Your current notes, cards, progress, and preferences will be replaced. Export a backup first if you want to keep them.</Text>
+              <Text className="mb-3 mt-1 text-sm leading-5 text-sub">Your current notes, cards, kept files, progress, and preferences will be replaced. Export a backup first if you want to keep them.</Text>
               <View className="gap-2"><Button label={busy ? 'Restoring...' : 'Replace with backup'} disabled={busy} onPress={() => void importData()} /><Button label="Cancel" variant="secondary" disabled={busy} onPress={cancelRestore} /></View>
             </View> : <Button label="Check backup" variant="secondary" disabled={busy || !raw.trim()} onPress={prepareRestore} />}
           </Card>
