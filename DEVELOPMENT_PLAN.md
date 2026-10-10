@@ -56,11 +56,11 @@ Prioritize these ahead of accounts or AI:
 | Work | User benefit | Acceptance |
 | --- | --- | --- |
 | Durable note drafts | Recover work after process death or browser reload | Draft restored per subject/note; explicit save/discard; reset removes drafts |
-| File-based backup import and restore preview | Avoid pasting large JSON documents | File size/type errors, version/table counts, roundtrip, cancellation, and malformed input tests |
+| File-based backup import and restore preview | Avoid pasting large JSON documents | File save/restore shipped October 10, 2026 (see `PERFORMANCE.md`); still needed: restore preview with table counts, cancellation tests, and native device checks |
 | Unified persistence or recovery journal | Recover an interrupted restore across SQL and preferences | Fault injection at every commit boundary; deterministic startup recovery |
 | Subject-scoped scheduled review | Study one class at a time | Subject due counts and queue agree; no unrelated cards enter session |
 | Missed-answer review | Turn mistakes into the next study session | Review only actual missed cards; handle edited/deleted cards; no synthetic questions |
-| SQL search and pagination for very large libraries | Keep memory/search responsive | Measure 1k/10k-card fixtures on representative devices; set budgets from observed baseline |
+| SQL search and pagination for very large libraries | Keep memory/search responsive | Notes list and search moved to SQL previews October 10, 2026; card library paging remains. `npm run stress` measures 1k to 40k-card fixtures; confirm budgets on devices |
 | Export/import compatibility fixtures | Keep old libraries usable | Every supported released backup version migrates or produces a specific safe rejection |
 
 Acceptance for each slice: source review, regression tests, relevant browser preview checks, and both native platform checks where behavior differs. Deliver one complete slice at a time.

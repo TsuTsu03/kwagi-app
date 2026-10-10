@@ -11,6 +11,13 @@ export const BACKUP_COLUMNS: Record<BackupTable, string[]> = {
   daily_stats: ['date', 'cards_studied', 'questions_answered', 'correct_answers', 'study_time_seconds', 'xp_earned'],
 };
 
+/**
+ * Restore limits. They must stay above what `createBackup` can produce for a real library:
+ * a four-year power user (40k cards, 50k quiz answers) exports about 50 MB and 100k records.
+ */
+export const MAX_BACKUP_CHARS = 120_000_000;
+export const MAX_BACKUP_RECORDS = 1_000_000;
+
 export interface KwagiBackup {
   format: 'kwagi-backup';
   version: 1;
@@ -42,7 +49,7 @@ function validDateKey(value: unknown): boolean {
 
 /** Validate the complete document before any local data is opened or replaced. */
 export function parseBackup(raw: string): KwagiBackup {
-  if (raw.length > 10_000_000) fail('This backup exceeds the 10 MB text limit.');
+  if (raw.length > MAX_BACKUP_CHARS) fail(`This backup is larger than ${MAX_BACKUP_CHARS / 1_000_000} MB, which Kwagi cannot restore.`);
   let value: unknown;
   try { value = JSON.parse(raw); } catch { fail('Paste a complete JSON backup exported by Kwagi.'); }
   if (!object(value) || value.format !== 'kwagi-backup' || value.version !== 1 || !object(value.data) || !object(value.settings)) {
@@ -66,7 +73,7 @@ export function parseBackup(raw: string): KwagiBackup {
     const rows = value.data[table];
     if (!Array.isArray(rows)) fail(`The backup is incomplete: ${table} is missing.`);
     rowCount += rows.length;
-    if (rowCount > 100_000) fail('This backup contains too many records.');
+    if (rowCount > MAX_BACKUP_RECORDS) fail('This backup contains too many records.');
     const seen = new Set<string>();
     ids.set(table, seen);
     for (const row of rows) {

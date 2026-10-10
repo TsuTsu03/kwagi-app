@@ -30,6 +30,10 @@ npm.cmd run export
 
 Run the app with `npm.cmd start`, `npm.cmd run android`, `npm.cmd run ios`, or `npm.cmd run web`.
 
+## Performance
+
+`npm run stress` loads libraries from 1,000 to 40,000 cards and multi-megabyte imports through the real data code. Results and known limits are in [PERFORMANCE.md](PERFORMANCE.md).
+
 ## Release checks
 
 `npm.cmd run release:check` runs lint, TypeScript, unit tests, Expo Doctor, and clean Android/iOS/web exports. A release candidate is not ready until this command passes and both native internal builds pass physical-device smoke tests.

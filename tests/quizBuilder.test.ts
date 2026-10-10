@@ -44,3 +44,15 @@ test('does not offer a duplicate answer as a wrong choice', () => {
     assert.equal(new Set(normalized).size, normalized.length);
   }
 });
+
+test('offers three distinct wrong answers from a large deck', () => {
+  const deck = Array.from({ length: 5_000 }, (_, i) => card(String(i), `Question ${i}`, `Answer ${i % 400}`));
+  const questions = buildQuiz(deck, 20);
+  assert.equal(questions.length, 20);
+  for (const question of questions) {
+    assert.equal(question.choices.length, 4);
+    const normalized = question.choices.map((choice) => choice.toLocaleLowerCase());
+    assert.equal(new Set(normalized).size, 4);
+    assert.equal(question.choices[question.answer], deck[Number(question.flashcardId)].back);
+  }
+});

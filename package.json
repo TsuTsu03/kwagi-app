@@ -16,6 +16,7 @@
     "expo-image-picker": "~57.0.16",
     "expo-linking": "~57.0.9",
     "expo-router": "~57.0.20",
+    "expo-sharing": "~57.0.18",
     "expo-splash-screen": "~57.0.8",
     "expo-sqlite": "~57.0.2",
     "expo-status-bar": "~57.0.1",
@@ -56,7 +57,8 @@
     "export": "expo export --platform all --clear",
     "qa:web": "node scripts/qa-runtime.js",
     "assets:store": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-store-assets.ps1",
-    "release:check": "npm run lint && npm run typecheck && npm test && npm run doctor && npm run export"
+    "release:check": "npm run lint && npm run typecheck && npm test && npm run doctor && npm run export",
+    "stress": "node --expose-gc --no-warnings scripts/stress-test.ts"
   },
   "private": true,
   "expo": {

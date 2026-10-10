@@ -6,6 +6,7 @@ import {
   detectImportKind,
   joinSections,
   limitNoteText,
+  prepareImportedText,
   titleFromFileName,
 } from '../lib/import/text.ts';
 import {
@@ -105,4 +106,28 @@ test('falls back to file numbering when presentation order is missing', () => {
 
 test('decodes UTF-8 text files', () => {
   assert.equal(decodeTextFile(strToU8('Ñiño — résumé')), 'Ñiño — résumé');
+});
+
+test('bounds work on huge imports and still reports truncation', () => {
+  const huge = 'line of lecture text\n'.repeat(50_000);
+  const prepared = prepareImportedText(huge, 1_000);
+  assert.equal(prepared.truncated, true);
+  assert.ok(prepared.text.length <= 1_000 && prepared.text.length > 800);
+  assert.deepEqual(prepareImportedText('short note', 1_000), { text: 'short note', truncated: false });
+  // A prefix of junk that cleans to nothing is not a truncated note; it is an empty import.
+  assert.deepEqual(prepareImportedText(`${'7\n'.repeat(5_000)}real text`, 1_000), { text: '', truncated: false });
+});
+
+test('readers stop early once the note budget is covered', () => {
+  const paragraphs = Array.from({ length: 1_000 }, (_, i) => `<w:p><w:r><w:t>Paragraph ${i} with some words</w:t></w:r></w:p>`).join('');
+  const bytes = docx(paragraphs);
+  const limited = extractDocxText(bytes, 500);
+  assert.ok(limited.length < 600 && limited.startsWith('Paragraph 0'));
+  assert.equal(extractDocxText(bytes).split('\n').length, 1_000);
+
+  const slides = zipSync(Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`ppt/slides/slide${i + 1}.xml`, slide(`Topic ${i + 1} ${'x'.repeat(100)}`)])));
+  assert.equal(extractPptxText(slides, 250).match(/^Slide \d+$/gm)?.length, 3);
+
+  const text = strToU8('ñ'.repeat(10_000));
+  assert.ok(decodeTextFile(text, 100).length <= 400);
 });

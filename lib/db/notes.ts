@@ -101,13 +101,30 @@ export async function deleteSubject(id: string): Promise<void> {
 
 // ---------------- Notes ----------------
 
-export async function listNotes(subjectId: string): Promise<Note[]> {
+/** What the notes list shows. Full content is loaded only when a note is opened. */
+export interface NoteSummary {
+  id: string;
+  title: string;
+  preview: string;
+  pinned: number;
+  updated_at: number;
+}
+
+const PREVIEW_CHARS = 240;
+
+/**
+ * List a subject's notes, optionally filtered by text in the title, content, or tags.
+ * Searching in SQLite avoids loading every note's full text (imports can be 100k characters each).
+ */
+export async function listNoteSummaries(subjectId: string, query = ''): Promise<NoteSummary[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<NoteRow>(
-    'SELECT * FROM notes WHERE subject_id = ? ORDER BY pinned DESC, updated_at DESC',
-    [subjectId],
+  const needle = query.trim().toLowerCase();
+  const search = needle ? ' AND (instr(lower(title), ?) > 0 OR instr(lower(content), ?) > 0 OR instr(lower(tags), ?) > 0)' : '';
+  return db.getAllAsync<NoteSummary>(
+    `SELECT id, title, substr(coalesce(content, ''), 1, ${PREVIEW_CHARS}) AS preview, pinned, updated_at
+     FROM notes WHERE subject_id = ?${search} ORDER BY pinned DESC, updated_at DESC`,
+    needle ? [subjectId, needle, needle, needle] : [subjectId],
   );
-  return rows.map(parseNote);
 }
 
 export async function getNote(id: string): Promise<Note | null> {

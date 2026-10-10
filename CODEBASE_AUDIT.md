@@ -48,7 +48,7 @@ This is an Expo Router application with SQLite study data and AsyncStorage prefe
 - **Restore crash boundary:** ordinary SQL/preference errors compensate, but SQLite and AsyncStorage do not share a transaction across process termination. A unified store or durable recovery journal is planned.
 - **Draft persistence:** editor-back confirmation protects that action; process death/browser refresh can still lose an unsaved draft. Tabs retain in-memory state, not a durable draft.
 - **Scale:** rows are virtualized and no longer hidden after 500, but library search still loads/filter cards in memory. Device measurements should drive SQL pagination/search.
-- **Backup compatibility:** strict current-format validation; limits are 10 million text characters and 100,000 records. Old incomplete exports need explicit migration tooling, not permissive destructive restore.
+- **Backup compatibility:** strict current-format validation; limits are 120 million text characters and 1,000,000 records (raised October 10, 2026 after stress tests showed 12 to 49 MB exports that the old 10 MB limit could not restore; see `PERFORMANCE.md`). Old incomplete exports need explicit migration tooling, not permissive destructive restore.
 - **Review scope:** due review currently draws from all subjects in batches of 30. “Session complete” no longer claims all due cards are exhausted.
 - **Product copy:** coaching retains existing Taglish; localization settings are not a complete translated UI. Gamification is engagement feedback, not academic certification.
 - **Release:** policy/support pages are deployed. A signed AAB, physical Android test, Play Console declarations/testing, review, and public availability still require provider and owner evidence.

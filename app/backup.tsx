@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/components/ui/Screen';
@@ -7,9 +7,14 @@ import { Container } from '@/components/ui/Container';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { createBackup, restoreBackup } from '@/lib/backup';
-import { parseBackup } from '@/lib/backupValidation';
+import { MAX_BACKUP_CHARS, parseBackup } from '@/lib/backupValidation';
+import { pickBackupFile, saveBackupFile } from '@/lib/backupFile';
 import { useAppStore } from '@/lib/store';
 import { useThemeColors } from '@/hooks/useTheme';
+
+/** Larger text freezes a TextInput, so only small backups get the copyable text fallback. */
+const TEXT_FALLBACK_CHARS = 500_000;
+const yieldToUi = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 export default function BackupScreen() {
   const c = useThemeColors();
@@ -21,6 +26,9 @@ export default function BackupScreen() {
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
   const lock = useRef(false);
+  // A picked file can be tens of megabytes; keep it out of rendered state.
+  const pickedRaw = useRef<string | null>(null);
+  const [pickedName, setPickedName] = useState('');
 
   const report = (text: string, error = false) => { setMessage(text); setFailed(error); };
   const exportData = async () => {
@@ -31,29 +39,45 @@ export default function BackupScreen() {
     try {
       const backup = await createBackup();
       const json = JSON.stringify(backup);
-      setExported(json);
-      if (Platform.OS === 'web') {
-        const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `kwagi-backup-${backup.exportedAt.slice(0, 10)}.json`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        report('Backup download started. You can also copy the text below.');
-      } else {
-        const result = await Share.share({ title: 'Kwagi backup', message: json });
-        report(result.action === Share.dismissedAction ? 'Sharing cancelled. Your backup text is available below.' : 'Backup prepared. Keep your copy in a safe place.');
+      if (json.length > MAX_BACKUP_CHARS) {
+        report('Your library is too large for one backup file. Delete old quiz history or unused subjects, then try again.', true);
+        return;
       }
+      const small = json.length <= TEXT_FALLBACK_CHARS;
+      if (small) setExported(json);
+      const saved = await saveBackupFile(json, backup.exportedAt);
+      const size = `${(json.length / 1_000_000).toFixed(1)} MB`;
+      if (!saved) report(small ? 'Sharing is unavailable on this device. Copy the backup text below and save it yourself.' : 'Sharing is unavailable on this device, so the backup could not be saved.', true);
+      else if (Platform.OS === 'web') report(`Backup download started (${size}).${small ? ' You can also copy the text below.' : ''}`);
+      else report(`Backup file ready (${size}). Save it to Files, Drive, or another place you trust.`);
     } catch {
-      report('The backup could not be exported. If backup text appears below, you can copy it and save it yourself.', true);
+      report('The backup could not be exported. Please try again.', true);
     } finally { lock.current = false; setBusy(false); }
   };
 
   const prepareRestore = () => {
+    pickedRaw.current = null;
+    setPickedName('');
     try { parseBackup(raw); report(''); setConfirming(true); }
     catch (error) { report(error instanceof Error ? error.message : 'This backup is invalid.', true); }
+  };
+  const chooseFile = async () => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    report('');
+    try {
+      const picked = await pickBackupFile();
+      if (!picked) return;
+      await yieldToUi();
+      parseBackup(picked.raw);
+      pickedRaw.current = picked.raw;
+      setPickedName(picked.name);
+      setConfirming(true);
+    } catch (error) {
+      pickedRaw.current = null;
+      report(error instanceof Error ? error.message : 'This backup file could not be read.', true);
+    } finally { lock.current = false; setBusy(false); }
   };
   const importData = async () => {
     if (lock.current) return;
@@ -61,8 +85,11 @@ export default function BackupScreen() {
     setBusy(true);
     report('');
     try {
-      await restoreBackup(raw);
+      await yieldToUi();
+      await restoreBackup(pickedRaw.current ?? raw);
       await hydrate();
+      pickedRaw.current = null;
+      setPickedName('');
       setRaw('');
       setExported('');
       report('Backup restored. Your library and preferences have been replaced.');
@@ -70,6 +97,7 @@ export default function BackupScreen() {
       report(error instanceof Error ? error.message : 'The backup could not be restored. Please try again.', true);
     } finally { lock.current = false; setBusy(false); setConfirming(false); }
   };
+  const cancelRestore = () => { pickedRaw.current = null; setPickedName(''); setConfirming(false); };
 
   return (
     <Screen rail={false}>
@@ -88,12 +116,15 @@ export default function BackupScreen() {
           </Card>
           <Card>
             <Text className="text-md font-bold text-ink">Restore a saved backup</Text>
-            <Text className="mt-1 text-sm leading-5 text-sub">Open your saved JSON file and paste its full text below. Kwagi checks it before asking you to replace your current library.</Text>
+            <Text className="mt-1 text-sm leading-5 text-sub">Choose your saved backup file. Kwagi checks it before asking you to replace your current library.</Text>
+            <Button label={busy && !confirming ? 'Checking...' : 'Choose backup file'} disabled={busy || confirming} onPress={() => void chooseFile()} className="mt-4" />
+            <Text className="mt-4 text-sm text-sub">Or paste the text of a small backup:</Text>
             <TextInput value={raw} onChangeText={(text) => { setRaw(text); setConfirming(false); }} editable={!busy && !confirming} accessibilityLabel="Backup JSON to restore" placeholder="Paste backup JSON" placeholderTextColor={c.muted} multiline textAlignVertical="top" className="my-4 max-h-[320px] min-h-[180px] rounded-card border border-bordersoft bg-card p-3 text-xs text-ink" />
             {confirming ? <View className="rounded-card border border-coral p-3">
               <Text className="font-bold text-ink">Replace all current data?</Text>
+              {!!pickedName && <Text className="mt-1 text-sm text-sub">From {pickedName}</Text>}
               <Text className="mb-3 mt-1 text-sm leading-5 text-sub">Your current notes, cards, progress, and preferences will be replaced. Export a backup first if you want to keep them.</Text>
-              <View className="gap-2"><Button label={busy ? 'Restoring...' : 'Replace with backup'} disabled={busy} onPress={() => void importData()} /><Button label="Cancel" variant="secondary" disabled={busy} onPress={() => setConfirming(false)} /></View>
+              <View className="gap-2"><Button label={busy ? 'Restoring...' : 'Replace with backup'} disabled={busy} onPress={() => void importData()} /><Button label="Cancel" variant="secondary" disabled={busy} onPress={cancelRestore} /></View>
             </View> : <Button label="Check backup" variant="secondary" disabled={busy || !raw.trim()} onPress={prepareRestore} />}
           </Card>
         </Container>

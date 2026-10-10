@@ -32,6 +32,17 @@ test('backup validation accepts a complete library and an intentionally empty li
   assert.deepEqual(parseBackup(JSON.stringify(backup)), backup);
 });
 
+test('backups from large libraries can be restored (export has no smaller size limit)', () => {
+  const backup = fixture();
+  const content = 'Lecture text from an imported PDF.\n'.repeat(2_900);
+  for (let i = 0; i < 120; i++) {
+    backup.data.notes.push({ ...backup.data.notes[0], id: `big${i}`, title: `Imported ${i}`, content });
+  }
+  const raw = JSON.stringify(backup);
+  assert.ok(raw.length > 12_000_000, 'fixture should exceed the former 10 MB limit');
+  assert.equal(parseBackup(raw).data.notes.length, 121);
+});
+
 test('backup validation rejects incomplete tables, duplicate IDs and broken relationships', () => {
   for (const modify of [
     (b: KwagiBackup) => { Reflect.deleteProperty(b.data, 'notes'); },

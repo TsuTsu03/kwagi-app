@@ -76,6 +76,19 @@ export function joinSections(sections: string[]): string {
   return sections.map((section) => section.trim()).filter(Boolean).join('\n\n');
 }
 
+/**
+ * Cleaning only removes characters, so a prefix twice the note limit still fills the note in
+ * practice. Reading no further keeps a 25 MB text file from costing seconds and hundreds of MB.
+ */
+export const RAW_IMPORT_CHARS = MAX_IMPORT_CHARS * 2;
+
+/** Clean extracted text and fit it in one note. */
+export function prepareImportedText(raw: string, max = MAX_IMPORT_CHARS): { text: string; truncated: boolean } {
+  const budget = max * 2;
+  const limited = limitNoteText(cleanExtractedText(raw.length > budget ? raw.slice(0, budget) : raw), max);
+  return { text: limited.text, truncated: limited.truncated || (raw.length > budget && limited.text.length > 0) };
+}
+
 /** Cut oversized imports at a paragraph or line boundary so the editor stays responsive. */
 export function limitNoteText(text: string, max = MAX_IMPORT_CHARS): { text: string; truncated: boolean } {
   if (text.length <= max) return { text, truncated: false };

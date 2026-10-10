@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { File as FsFile, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { decodeTextFile, DocumentReadError, extractDocxText, extractPptxText } from './office';
-import { cleanExtractedText, detectImportKind, joinSections, limitNoteText, titleFromFileName, type ImportKind } from './text';
+import { detectImportKind, joinSections, prepareImportedText, RAW_IMPORT_CHARS, titleFromFileName, type ImportKind } from './text';
 
 export interface ImportedNote {
   title: string;
@@ -44,15 +44,14 @@ function discardCachedCopy(uri: string | undefined) {
 }
 
 function finish(kind: ImportKind, title: string, sections: string[]): ImportedNote {
-  const cleaned = cleanExtractedText(joinSections(sections));
-  if (!cleaned) {
+  const { text, truncated } = prepareImportedText(joinSections(sections));
+  if (!text) {
     throw new ImportError(kind === 'image'
       ? 'No readable text was found. Try a brighter, sharper photo taken straight on.'
       : kind === 'pdf'
         ? 'This PDF has no selectable text, which usually means it is a scan. Take photos of the pages instead.'
         : 'This file has no text to import.');
   }
-  const { text, truncated } = limitNoteText(cleaned);
   return { title, text, sources: sections.length, kind, truncated };
 }
 
@@ -151,7 +150,9 @@ export async function importFromFile(): Promise<ImportedNote | null> {
 
     const bytes = await readBytes(asset);
     if (bytes.byteLength > MAX_FILE_BYTES) throw new ImportError('This file is larger than 25 MB. Split it into smaller files and try again.');
-    const text = kind === 'docx' ? extractDocxText(bytes) : kind === 'pptx' ? extractPptxText(bytes) : decodeTextFile(bytes);
+    const text = kind === 'docx' ? extractDocxText(bytes, RAW_IMPORT_CHARS)
+      : kind === 'pptx' ? extractPptxText(bytes, RAW_IMPORT_CHARS)
+        : decodeTextFile(bytes, RAW_IMPORT_CHARS);
     return finish(kind, title, [text]);
   } catch (error) {
     if (error instanceof DocumentReadError) throw new ImportError(error.message);

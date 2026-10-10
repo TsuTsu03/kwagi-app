@@ -39,8 +39,9 @@ function unzipParts(bytes: Uint8Array, wanted: (name: string) => boolean): Recor
  * Read the paragraphs of an Office Open XML part. Word and PowerPoint use the same shape:
  * paragraphs (`w:p` / `a:p`) contain text runs (`w:t` / `a:t`), tabs, and line breaks.
  */
-function paragraphsFromXml(xml: string, ns: 'w' | 'a'): string[] {
+function paragraphsFromXml(xml: string, ns: 'w' | 'a', budget = Infinity): string[] {
   const paragraphs: string[] = [];
+  let used = 0;
   const paragraphPattern = new RegExp(`<${ns}:p[\\s>][\\s\\S]*?</${ns}:p>|<${ns}:p/>`, 'g');
   const piecePattern = new RegExp(`<${ns}:t(?:\\s[^>]*)?>([\\s\\S]*?)</${ns}:t>|<${ns}:(tab|br)\\b[^>]*/>`, 'g');
   for (const [paragraph] of xml.matchAll(paragraphPattern)) {
@@ -51,15 +52,18 @@ function paragraphsFromXml(xml: string, ns: 'w' | 'a'): string[] {
       else text += decodeXmlEntities(piece[1]);
     }
     paragraphs.push(text);
+    used += text.length + 1;
+    // Stop once the note limit is covered; the rest would be cut anyway.
+    if (used > budget) break;
   }
   return paragraphs;
 }
 
-export function extractDocxText(bytes: Uint8Array): string {
+export function extractDocxText(bytes: Uint8Array, budget = Infinity): string {
   const parts = unzipParts(bytes, (name) => name === 'word/document.xml');
   const xml = parts['word/document.xml'];
   if (xml === undefined) throw new DocumentReadError('This file is not a Word document.');
-  return paragraphsFromXml(xml, 'w').join('\n');
+  return paragraphsFromXml(xml, 'w', budget).join('\n');
 }
 
 const PRESENTATION = 'ppt/presentation.xml';
@@ -86,21 +90,25 @@ function slideOrder(parts: Record<string, string>, slideNames: string[]): string
   return ordered.length ? [...ordered, ...byNumber.filter((name) => !ordered.includes(name))] : byNumber;
 }
 
-export function extractPptxText(bytes: Uint8Array): string {
+export function extractPptxText(bytes: Uint8Array, budget = Infinity): string {
   const slidePattern = /^ppt\/slides\/slide\d+\.xml$/;
   const parts = unzipParts(bytes, (name) => slidePattern.test(name) || name === PRESENTATION || name === PRESENTATION_RELS);
   const slideNames = Object.keys(parts).filter((name) => slidePattern.test(name));
   if (!slideNames.length) throw new DocumentReadError('This presentation has no slides to import.');
-  return slideOrder(parts, slideNames)
-    .map((name, index) => {
-      const body = paragraphsFromXml(parts[name], 'a').filter((line) => line.trim()).join('\n');
-      return body ? `Slide ${index + 1}\n${body}` : '';
-    })
-    .filter(Boolean)
-    .join('\n\n');
+  const slides: string[] = [];
+  let used = 0;
+  for (const [index, name] of slideOrder(parts, slideNames).entries()) {
+    if (used > budget) break;
+    const body = paragraphsFromXml(parts[name], 'a').filter((line) => line.trim()).join('\n');
+    if (!body) continue;
+    slides.push(`Slide ${index + 1}\n${body}`);
+    used += body.length;
+  }
+  return slides.join('\n\n');
 }
 
-/** Decode a plain-text or Markdown file as UTF-8. */
-export function decodeTextFile(bytes: Uint8Array): string {
-  return strFromU8(bytes);
+/** Decode a plain-text or Markdown file as UTF-8, reading at most about `budget` characters. */
+export function decodeTextFile(bytes: Uint8Array, budget = Infinity): string {
+  // UTF-8 uses at most 4 bytes per character; a character cut at the end becomes U+FFFD.
+  return strFromU8(budget * 4 < bytes.byteLength ? bytes.subarray(0, budget * 4) : bytes);
 }

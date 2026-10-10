@@ -1,9 +1,10 @@
 import { showAlert } from '@/lib/alert';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   BackHandler,
+  FlatList,
   Platform,
   ScrollView,
   Text,
@@ -23,12 +24,14 @@ import {
   createSubject,
   deleteNote,
   deleteSubject,
-  listNotes,
+  getNote,
+  listNoteSummaries,
   listSubjects,
   saveNoteWithCards,
   togglePin,
   updateNote,
   type Note,
+  type NoteSummary,
   type SubjectWithCount,
 } from '@/lib/db/notes';
 import { generateFlashcards } from '@/lib/flashcardGenerator';
@@ -56,7 +59,8 @@ export default function NotesScreen() {
   const [view, setView] = useState<NotesView>('subjects');
   const [subjects, setSubjects] = useState<SubjectWithCount[]>([]);
   const [activeSubject, setActiveSubject] = useState<SubjectWithCount | null>(null);
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<NoteSummary[]>([]);
+  const [results, setResults] = useState<{ query: string; notes: NoteSummary[] } | null>(null);
   const [editing, setEditing] = useState<Note | null>(null);
   const [subjectName, setSubjectName] = useState('');
   const [addingSubject, setAddingSubject] = useState(false);
@@ -83,7 +87,7 @@ export default function NotesScreen() {
   const openSubject = useCallback(async (subject: SubjectWithCount) => {
     try {
       setActiveSubject(subject);
-      setNotes(await listNotes(subject.id));
+      setNotes(await listNoteSummaries(subject.id));
       setQuery('');
       setImportOpen(false);
       setView('notes');
@@ -92,13 +96,20 @@ export default function NotesScreen() {
     }
   }, []);
 
-  const filteredNotes = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return notes;
-    return notes.filter((note) =>
-      `${note.title} ${note.content} ${note.tags.join(' ')}`.toLowerCase().includes(needle),
-    );
-  }, [notes, query]);
+  // Search in SQLite after typing pauses, so large libraries do not re-filter on every keystroke.
+  const needle = query.trim();
+  useEffect(() => {
+    if (!needle || !activeSubject) return;
+    let current = true;
+    const timer = setTimeout(() => {
+      listNoteSummaries(activeSubject.id, needle)
+        .then((found) => { if (current) setResults({ query: needle, notes: found }); })
+        .catch(() => { if (current) setResults({ query: needle, notes: [] }); });
+    }, 200);
+    return () => { current = false; clearTimeout(timer); };
+  }, [activeSubject, notes, needle]);
+  const searched = needle && results?.query === needle ? results.notes : null;
+  const filteredNotes = searched ?? notes;
 
   const addSubject = useCallback(async () => {
     const name = subjectName.trim();
@@ -117,13 +128,22 @@ export default function NotesScreen() {
     }
   }, [refreshSubjects, subjectBusy, subjectName, subjects.length]);
 
-  const openEditor = useCallback((note: Note | null) => {
+  const showEditor = useCallback((note: Note | null) => {
     setEditing(note);
     setTitle(note?.title ?? '');
     setContent(note?.content ?? '');
     setImportNotice(null);
     setView('editor');
   }, []);
+  const openNote = useCallback(async (summary: NoteSummary) => {
+    try {
+      const note = await getNote(summary.id);
+      if (note) showEditor(note);
+      else showAlert('Note not found', 'It may have been deleted. Please refresh this subject.');
+    } catch {
+      showAlert('Could not open note', 'Your note is still on this device. Please try again.');
+    }
+  }, [showEditor]);
 
   const runImport = useCallback(async (source: ImportSource) => {
     if (importing) return;
@@ -167,7 +187,7 @@ export default function NotesScreen() {
     if (!activeSubject) return;
     try {
       await action();
-      setNotes(await listNotes(activeSubject.id));
+      setNotes(await listNoteSummaries(activeSubject.id));
       await refreshSubjects();
     } catch {
       showAlert('Could not update notes', 'Nothing was changed. Please try again.');
@@ -204,7 +224,7 @@ export default function NotesScreen() {
       } else {
         await createNote({ subject_id: activeSubject.id, title: cleanTitle, content });
       }
-      setNotes(await listNotes(activeSubject.id));
+      setNotes(await listNoteSummaries(activeSubject.id));
       await refreshSubjects();
       setView('notes');
     } catch {
@@ -259,7 +279,14 @@ export default function NotesScreen() {
   if (view === 'notes' && activeSubject) {
     return (
       <Screen>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <FlatList
+          data={filteredNotes}
+          keyExtractor={(note) => note.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          initialNumToRender={12}
+          windowSize={7}
+          ListHeaderComponent={
           <Container>
             <View className="mb-4 flex-row items-center">
               <PressableScale onPress={() => setView('subjects')} accessibilityRole="button" accessibilityLabel="Back to subjects" className="h-11 w-11 items-center justify-center">
@@ -272,7 +299,7 @@ export default function NotesScreen() {
               <PressableScale onPress={() => setImportOpen((open) => !open)} disabled={!!importing} accessibilityRole="button" accessibilityLabel="Import notes" accessibilityState={{ expanded: importOpen }} className="mr-2 h-11 w-11 items-center justify-center rounded-full border border-bordersoft bg-surface">
                 <Ionicons name="document-text-outline" size={21} color={c.amber} />
               </PressableScale>
-              <PressableScale onPress={() => openEditor(null)} accessibilityRole="button" accessibilityLabel="New note" className="h-11 w-11 items-center justify-center rounded-full bg-amber">
+              <PressableScale onPress={() => showEditor(null)} accessibilityRole="button" accessibilityLabel="New note" className="h-11 w-11 items-center justify-center rounded-full bg-amber">
                 <Ionicons name="add" size={24} color={c.bg} />
               </PressableScale>
             </View>
@@ -306,13 +333,16 @@ export default function NotesScreen() {
               <Ionicons name="search" size={18} color={c.muted} />
               <TextInput value={query} onChangeText={setQuery} placeholder="Search notes" placeholderTextColor={c.muted} className="ml-2 min-h-11 flex-1 text-md text-ink" />
             </View>
-            {filteredNotes.map((note) => (
-              <Card key={note.id} className="mb-3">
+          </Container>
+          }
+          renderItem={({ item: note }) => (
+            <Container>
+              <Card className="mb-3">
                 <View className="flex-row items-start">
-                  <PressableScale onPress={() => openEditor(note)} accessibilityRole="button" accessibilityLabel={`Open ${note.title}`} className="flex-1">
+                  <PressableScale onPress={() => void openNote(note)} accessibilityRole="button" accessibilityLabel={`Open ${note.title}`} className="flex-1">
                     <View>
                       <Text className="text-md font-bold text-ink" numberOfLines={1}>{note.title}</Text>
-                      <Text className="mt-1 text-sm leading-5 text-sub" numberOfLines={3}>{note.content || 'Empty note'}</Text>
+                      <Text className="mt-1 text-sm leading-5 text-sub" numberOfLines={3}>{note.preview || 'Empty note'}</Text>
                     </View>
                   </PressableScale>
                   <View className="ml-2">
@@ -328,10 +358,10 @@ export default function NotesScreen() {
                   </View>
                 </View>
               </Card>
-            ))}
-            {!filteredNotes.length && <Text className="py-12 text-center text-sm text-muted">{query ? 'No notes match your search.' : 'No notes yet. Add your first one.'}</Text>}
-          </Container>
-        </ScrollView>
+            </Container>
+          )}
+          ListEmptyComponent={<Text className="py-12 text-center text-sm text-muted">{searched ? 'No notes match your search.' : 'No notes yet. Add your first one.'}</Text>}
+        />
       </Screen>
     );
   }
