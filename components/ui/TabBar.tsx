@@ -11,6 +11,7 @@ import Animated, {
 import { useThemeColors } from '@/hooks/useTheme';
 import { useTablet } from '@/hooks/useTablet';
 import { useAnimationsEnabled } from '@/hooks/useAnimationsEnabled';
+import { useAppStore } from '@/lib/store';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -44,6 +45,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 };
 
 export function TabBar({ state, navigation }: TabBarProps) {
+  const focusMode = useAppStore((s) => s.focusMode);
   const insets = useSafeAreaInsets();
   const { isTablet } = useTablet();
   const { height } = useWindowDimensions();
@@ -53,6 +55,9 @@ export function TabBar({ state, navigation }: TabBarProps) {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
     if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
   };
+
+  // A study session takes the whole screen.
+  if (focusMode) return null;
 
   // Tablet: a fixed left rail. It's absolutely positioned from the bottom and
   // sized to the full window height so it spans the screen even though the

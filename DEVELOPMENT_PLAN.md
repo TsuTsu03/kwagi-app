@@ -38,6 +38,18 @@ The owner chose to keep every new feature offline-first. These decisions apply u
 | 2. Lecture recording and on-device transcription | Not started | Background recording for 1 to 2 hours, chunked Whisper transcription with progress, English-first model, optional model download |
 | 3. Summaries and generated cards/quizzes | Not started | Extractive summary on every device, on-device LLM where supported, per-card source sentence, accept/edit/discard review, hand-graded accuracy on 20 to 30 real notes |
 
+## Study experience (October 10, 2026)
+
+Goal: studying should feel fun and focused without turning the app into a game. No learning path, hearts, or leaderboards; students bring their own topics.
+
+- **Focus mode:** quiz and review sessions hide the tab bar and the peeking owl.
+- **Quiz:** Kwagi asks each question in a speech bubble; chunky answer bubbles press down, pop when right, and shake when wrong; feedback slides up with the right answer; a flame shows correct answers in a row; results offer "Practice N missed" before "Another round".
+- **Review:** bubble card with a squash-and-stretch flip (works on the web, where the old 3D flip rendered both sides), Kwagi perched on the card reacting to each rating, cards slide out, and "Keep going" loads the next due batch.
+- **Finish:** counted-up stats, the daily goal bar, a short bubble burst, and one clear next step.
+- **Feel:** Nunito display font, spring-based motion that respects Reduce Motion and the in-app animation setting, soft synthesized sounds (`scripts/generate-sounds.mjs`) that mix with the student's music and can be turned off in Settings.
+
+Acceptance before release: test on physical Android and iPhone for animation smoothness at 60 fps on a budget Android phone, sound behavior with the silent switch and background music, TalkBack/VoiceOver reading of questions, choices, and feedback, and large text in the answer bubbles.
+
 ## Phase 1: Prove the offline beta on devices
 
 Priority: next. Owner: engineering, with signing/account access from the owner.

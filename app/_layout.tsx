@@ -12,6 +12,7 @@ import { getDb } from '@/lib/db/client';
 import { sweepOrphanFiles } from '@/lib/attachmentFiles';
 import { useThemeColors, useIsDark } from '@/hooks/useTheme';
 import { PeekingKwagi } from '@/components/kwagi/PeekingKwagi';
+import { useFonts, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black } from '@expo-google-fonts/nunito';
 
 export default function RootLayout() {
   const hydrate = useAppStore((s) => s.hydrate);
@@ -21,6 +22,9 @@ export default function RootLayout() {
   const hydrated = useAppStore((s) => s.hydrated);
   const onboardingComplete = useAppStore((s) => s.settings.onboardingComplete);
   const animationPreference = useAppStore((s) => s.settings.animationPreference);
+  const focusMode = useAppStore((s) => s.focusMode);
+  // Rounded display font for study screens; text falls back to the system font until it loads.
+  useFonts({ Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black });
   const segments = useSegments();
   const [dbError, setDbError] = useState(false);
 
@@ -70,8 +74,8 @@ export default function RootLayout() {
           <Stack.Screen name="storage" />
           <Stack.Screen name="legal" />
         </Stack>
-        {/* Omnipresent study buddy, mounted once above every screen. Hidden during onboarding so it never covers the form. */}
-        {onboardingComplete && segments[0] !== 'onboarding' && <PeekingKwagi />}
+        {/* Omnipresent study buddy, mounted once above every screen. Hidden during onboarding and study sessions so it never covers the content. */}
+        {onboardingComplete && segments[0] !== 'onboarding' && !focusMode && <PeekingKwagi />}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

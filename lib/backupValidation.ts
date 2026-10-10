@@ -63,7 +63,9 @@ export function parseBackup(raw: string): KwagiBackup {
     || !choice(settings.animationPreference, ['system', 'on', 'off'])
     || !choice(settings.dialogueLanguage, ['taglish', 'filipino', 'english'])
     || !choice(settings.themePref, ['light', 'dark', 'system'])
-    || (settings.lastStudyAt !== null && !nonnegative(settings.lastStudyAt))) {
+    || (settings.lastStudyAt !== null && !nonnegative(settings.lastStudyAt))
+    // Added after version 1 shipped, so older backups may omit it.
+    || (settings.soundEffects !== undefined && typeof settings.soundEffects !== 'boolean')) {
     fail('The backup contains invalid or missing preferences.');
   }
 

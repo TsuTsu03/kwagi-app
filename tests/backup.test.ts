@@ -11,7 +11,7 @@ import { SCHEMA_SQL } from '../lib/db/schema.ts';
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript') as typeof import('typescript');
-const settings = { studentName: 'Student', course: 'Biology', yearLevel: '1', onboardingComplete: true, dailyGoal: 20, animationPreference: 'off', dialogueLanguage: 'english', themePref: 'dark', lastStudyAt: null } as const;
+const settings = { studentName: 'Student', course: 'Biology', yearLevel: '1', onboardingComplete: true, dailyGoal: 20, animationPreference: 'off', dialogueLanguage: 'english', themePref: 'dark', lastStudyAt: null, soundEffects: true } as const;
 const subject = { id: 's1', name: 'Biology', board: null, color: null, icon: null, created_at: 1 };
 function fixture(): KwagiBackup {
   return {
@@ -30,6 +30,15 @@ test('backup validation accepts a complete library and an intentionally empty li
   assert.deepEqual(parseBackup(JSON.stringify(backup)), backup);
   Object.values(backup.data).forEach((rows) => rows.splice(0));
   assert.deepEqual(parseBackup(JSON.stringify(backup)), backup);
+});
+
+test('backups from before the sound setting still validate; a malformed sound setting does not', () => {
+  const old = fixture();
+  Reflect.deleteProperty(old.settings, 'soundEffects');
+  assert.doesNotThrow(() => parseBackup(JSON.stringify(old)));
+  const bad = fixture();
+  Object.assign(bad.settings, { soundEffects: 'yes' });
+  assert.throws(() => parseBackup(JSON.stringify(bad)), /preferences/);
 });
 
 test('backups from large libraries can be restored (export has no smaller size limit)', () => {

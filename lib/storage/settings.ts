@@ -14,6 +14,8 @@ export interface Settings {
   themePref: ThemePref;
   /** Epoch ms of the most recent study activity — powers Kwagi's coaching. */
   lastStudyAt: number | null;
+  /** Soft sounds for answers and finished sessions. */
+  soundEffects: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -26,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dialogueLanguage: 'taglish',
   themePref: 'dark',
   lastStudyAt: null,
+  soundEffects: true,
 };
 
 const KEY = 'kwagi.settings.v1';

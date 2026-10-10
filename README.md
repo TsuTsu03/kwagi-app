@@ -1,6 +1,6 @@
 # Kwagi
 
-Kwagi is an offline study app for college students. Users organize notes, import notes from photos, PDFs, Word, PowerPoint, and text files, create flashcards from structured note lines, review due cards with spaced repetition, build quizzes from their own cards, and track local progress.
+Kwagi is an offline study app for college students. Users organize notes, import notes from photos, PDFs, Word, PowerPoint, and text files, study in focused quiz and review sessions with Kwagi, create flashcards from structured note lines, review due cards with spaced repetition, build quizzes from their own cards, and track local progress.
 
 The current release has no account system, ads, analytics, payments, cloud sync, or cloud AI service. Photo text recognition runs on the device (Google ML Kit on Android, Apple Vision on iOS).
 

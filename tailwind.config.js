@@ -44,6 +44,13 @@ module.exports = {
         tight: '-0.4px',
         tighter: '-0.8px',
       },
+      fontFamily: {
+        // Rounded, chunky display face for study screens. Do not combine with font-bold:
+        // Android picks the face by family name, not weight.
+        display: ['Nunito_900Black'],
+        rounded: ['Nunito_800ExtraBold'],
+        roundedsoft: ['Nunito_700Bold'],
+      },
       borderRadius: {
         card: '22px',
         pill: '100px',

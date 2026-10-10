@@ -17,6 +17,8 @@ interface Props extends Omit<PressableProps, 'children'> {
   icon?: React.ReactNode;
   haptic?: boolean;
   fullWidth?: boolean;
+  /** Face color for a primary button (for example green after a correct answer). Defaults to amber. */
+  color?: string;
   className?: string;
 }
 
@@ -48,6 +50,7 @@ export function Button({
   icon,
   haptic = true,
   fullWidth = false,
+  color,
   disabled,
   className = '',
   onPress,
@@ -62,7 +65,7 @@ export function Button({
 
   const flat = variant === 'ghost';
   const lip =
-    variant === 'primary' ? darken(c.amber, 0.28) : variant === 'secondary' ? c.border : 'transparent';
+    variant === 'primary' ? darken(color ?? c.amber, 0.28) : variant === 'secondary' ? c.border : 'transparent';
 
   return (
     <Pressable
@@ -96,7 +99,7 @@ export function Button({
             borderRadius: 999,
             paddingHorizontal: 24,
             paddingVertical: 12,
-            backgroundColor: variant === 'primary' ? c.amber : variant === 'secondary' ? c.card : 'transparent',
+            backgroundColor: variant === 'primary' ? color ?? c.amber : variant === 'secondary' ? c.card : 'transparent',
             borderWidth: variant === 'secondary' ? 1 : 0,
             borderColor: c.borderSoft,
           }]}

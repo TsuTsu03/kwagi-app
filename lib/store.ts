@@ -9,6 +9,9 @@ import {
 interface AppState {
   settings: Settings;
   hydrated: boolean;
+  /** A study session is open: hide navigation and the peeking owl so nothing competes for attention. */
+  focusMode: boolean;
+  setFocusMode: (focusMode: boolean) => void;
   hydrate: () => Promise<void>;
   setDailyGoal: (goal: number) => Promise<void>;
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
@@ -28,6 +31,8 @@ function queueSettingsSave(settings: Settings): Promise<void> {
 export const useAppStore = create<AppState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   hydrated: false,
+  focusMode: false,
+  setFocusMode: (focusMode) => set({ focusMode }),
 
   hydrate: async () => {
     const settings = await loadSettings();

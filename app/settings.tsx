@@ -1,6 +1,6 @@
 import { showAlert } from '@/lib/alert';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -68,7 +68,7 @@ export default function SettingsScreen() {
           <Text className="mb-3 text-xs leading-5 text-muted">Device follows your operating-system Reduce Motion setting.</Text>
           <View className="flex-row gap-2">{ANIMATION_OPTIONS.map((option) => { const active = settings.animationPreference === option.value; return <PressableScale key={option.value} onPress={() => persistPreference({ animationPreference: option.value })} accessibilityRole="button" accessibilityState={{ selected: active }} className={`min-h-11 flex-1 items-center justify-center rounded-card border ${active ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={`text-sm font-semibold ${active ? 'text-amber' : 'text-sub'}`}>{option.label}</Text></PressableScale>; })}</View>
         </Section>
-        <Section label="STUDY" icon="book"><Text className="text-md text-ink">Daily goal</Text><Text className="mt-1 text-sm text-sub">Card reviews and quiz answers count toward your goal.</Text><View className="mt-3 flex-row flex-wrap gap-2">{GOALS.map((goal) => <PressableScale key={goal} onPress={() => persistGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: settings.dailyGoal === goal }} className={`min-h-11 justify-center rounded-pill border px-4 py-2 ${settings.dailyGoal === goal ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={settings.dailyGoal === goal ? 'font-bold text-amber' : 'text-sub'}>{goal}</Text></PressableScale>)}</View></Section>
+        <Section label="STUDY" icon="book"><View className="mb-4 flex-row items-center"><View className="flex-1"><Text className="text-md text-ink">Sound effects</Text><Text className="mt-1 text-sm text-sub">Soft sounds for answers and finished sessions. Your music keeps playing.</Text></View><Switch value={settings.soundEffects} onValueChange={(value) => persistPreference({ soundEffects: value })} accessibilityLabel="Sound effects" trackColor={{ true: c.amber, false: c.muted }} /></View><Text className="text-md text-ink">Daily goal</Text><Text className="mt-1 text-sm text-sub">Card reviews and quiz answers count toward your goal.</Text><View className="mt-3 flex-row flex-wrap gap-2">{GOALS.map((goal) => <PressableScale key={goal} onPress={() => persistGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: settings.dailyGoal === goal }} className={`min-h-11 justify-center rounded-pill border px-4 py-2 ${settings.dailyGoal === goal ? 'border-amber bg-amberdim' : 'border-bordersoft'}`}><Text className={settings.dailyGoal === goal ? 'font-bold text-amber' : 'text-sub'}>{goal}</Text></PressableScale>)}</View></Section>
         <Section label="DATA & SUPPORT" icon="server">
           <SettingLink icon="download-outline" label="Backup and restore" onPress={() => router.push('/backup')} />
           <SettingLink icon="folder-open-outline" label="Storage" onPress={() => router.push('/storage')} />
